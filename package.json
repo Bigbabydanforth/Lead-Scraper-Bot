@@ -1,0 +1,20 @@
+{
+  "name": "demo-project",
+  "version": "1.0.0",
+  "description": "Telegram Lead Scraper Bot",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.90.0",
+    "airtable": "^0.12.2",
+    "csv-writer": "^1.6.0",
+    "dotenv": "^17.3.1",
+    "puppeteer": "^24.39.0",
+    "telegraf": "^4.16.3"
+  }
+}
