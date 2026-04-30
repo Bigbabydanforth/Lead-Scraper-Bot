@@ -6,7 +6,7 @@ const { Telegraf } = require('telegraf');
 const Airtable = require('airtable');
 
 const { scrapeGoogleMaps } = require('./execution/scrape_google_maps');
-const { enrichLead } = require('./execution/enrich_leads');
+const { enrichLead, getCurrentMode } = require('./execution/enrich_leads');
 const { researchCompany } = require('./execution/research_company');
 const { draftEmail } = require('./execution/draft_email');
 const { sendEmails } = require('./execution/send_email');
@@ -77,32 +77,40 @@ async function runDailyPipeline(overrideService, overrideCity, overrideCount) {
             return;
         }
 
-        const cIndex = targets.current_city_index || 0;
-        const sIndex = targets.current_service_index || 0;
-        const countryIndex = targets.current_country_index || 0;
-        const primaryCountry = targets.primary_countries[countryIndex];
-        const citiesList = targets.cities[primaryCountry];
+        const allCountries = [
+            ...(targets.primary_countries || []),
+            ...(targets.secondary_countries || [])
+        ];
+        
+        const countryIndex = (targets.current_country_index || 0) % allCountries.length;
+        const sIndex = (targets.current_service_index || 0) % targets.service_categories.length;
+        const country = allCountries[countryIndex];
+        const citiesList = targets.cities[country] || ["Unknown"];
+        const cIndex = (targets.current_city_index || 0) % citiesList.length;
         
         city = citiesList[cIndex];
         service = targets.service_categories[sIndex];
         countToScrape = targets.scrape_buffer || 40;
         dailyTarget = targets.leads_per_run || 15;
 
-        console.log(`[scheduler] Today's target: ${service} in ${city}, ${primaryCountry}`);
+        console.log(`[scheduler] Today's target: ${service} in ${city}, ${country}`);
 
-        // Update targets.json for next run
-        targets.current_service_index = sIndex + 1;
-        if (targets.current_service_index >= targets.service_categories.length) {
-            targets.current_service_index = 0;
-            targets.current_city_index = cIndex + 1;
-            if (targets.current_city_index >= citiesList.length) {
-                targets.current_city_index = 0;
-                targets.current_country_index = (targets.current_country_index || 0) + 1;
-                if (targets.current_country_index >= targets.primary_countries.length) {
-                    targets.current_country_index = 0;
-                }
-            }
+        // Update targets.json for next run (Option 3: Country Sweeper)
+        // 1. Advance the service index globally every day
+        targets.current_service_index = (sIndex + 1) % targets.service_categories.length;
+        
+        // 2. Advance the city index every day
+        const nextCIndex = cIndex + 1;
+        if (nextCIndex >= citiesList.length) {
+            // Exhausted all cities in this country -> Move to next country
+            targets.current_city_index = 0;
+            targets.current_country_index = (countryIndex + 1) % allCountries.length;
+        } else {
+            // Move to next city in the same country
+            targets.current_city_index = nextCIndex;
+            targets.current_country_index = countryIndex;
         }
+
         fs.writeFileSync(TARGETS_FILE, JSON.stringify(targets, null, 2));
     }
 
@@ -144,6 +152,15 @@ async function runDailyPipeline(overrideService, overrideCity, overrideCount) {
     const qualifiedLeads = [];
     const allProcessed = [];
 
+    const mode = getCurrentMode();
+    if (mode === 'name_only') {
+        console.log(`[scheduler] Mode: NAME-ONLY — domain providers exhausted. Only leads with a scraped decision maker name will qualify.`);
+    } else if (mode === 'company_only') {
+        console.log(`[scheduler] Mode: COMPANY-ONLY — all providers exhausted. Sending Email 1 (company inbox) only.`);
+    } else {
+        console.log(`[scheduler] Mode: FULL — domain search active.`);
+    }
+
     for (const rawLead of rawLeads) {
         if (qualifiedLeads.length >= dailyTarget) break;
 
@@ -153,6 +170,13 @@ async function runDailyPipeline(overrideService, overrideCity, overrideCount) {
             continue;
         }
         summaryData.enriched++;
+
+        // In name-only mode, skip any lead where website scraping found no decision maker name.
+        // All three domain providers are exhausted — GetProspect/Prospeo need a name to work.
+        if (mode === 'name_only' && !enriched.decision_maker_name) {
+            console.log(`[scheduler] Name-only mode: skipping ${rawLead.name} — no name found on website`);
+            continue;
+        }
 
         const opps = await researchCompany(enriched);
         if (!opps || opps.length === 0) {

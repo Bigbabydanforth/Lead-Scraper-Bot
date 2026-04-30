@@ -17,7 +17,16 @@ function getProviderStatus() {
             if (data.date === today) return data;
         } catch (e) {}
     }
-    return { date: today, hunter: false, snov: false, tomba: false };
+    return { date: today, hunter: false, snov: false, tomba: false, getprospect: false, prospeo: false };
+}
+
+function getCurrentMode() {
+    const status = getProviderStatus();
+    const domainExhausted = status.hunter && status.snov && status.tomba;
+    const nameExhausted = status.getprospect && status.prospeo;
+    if (!domainExhausted) return 'full';
+    if (!nameExhausted) return 'name_only';
+    return 'company_only';
 }
 
 function markExhausted(provider) {
@@ -63,6 +72,7 @@ async function tryHunter(domain) {
 // Name-based lookup — only fires after website scraping finds a decision maker name.
 async function tryGetProspect(domain, name) {
     if (!process.env.GETPROSPECT_API_KEY || !name) return null;
+    if (getProviderStatus().getprospect) { console.log(`[enrich] GetProspect — skipping (exhausted today)`); return null; }
     const parts = name.trim().split(/\s+/);
     if (parts.length < 2) return null;
     try {
@@ -75,12 +85,15 @@ async function tryGetProspect(domain, name) {
         });
         const email = res.data?.data?.email;
         const status = res.data?.data?.status;
+        const creditsLeft = res.data?.metadata?.credits?.email_search;
+        if (creditsLeft === 0) markExhausted('getprospect');
         if (email && (status === 'valid' || status === 'accept_all')) {
             console.log(`[enrich] GetProspect → ${email}`);
             return { email, name, title: null };
         }
     } catch (e) {
-        console.log(`[enrich] GetProspect failed: ${e.message}`);
+        if (e.response?.status === 402 || e.response?.status === 429) markExhausted('getprospect');
+        else console.log(`[enrich] GetProspect failed: ${e.message}`);
     }
     return null;
 }
@@ -227,6 +240,7 @@ async function tryTomba(domain) {
 // Now uses /enrich-person which requires a name — called only after scraping finds a name.
 async function tryProspeo(domain, name) {
     if (!process.env.PROSPEO_API_KEY || !name) return null;
+    if (getProviderStatus().prospeo) { console.log(`[enrich] Prospeo — skipping (exhausted today)`); return null; }
     const parts = name.trim().split(/\s+/);
     if (parts.length < 2) return null;
     try {
@@ -252,7 +266,8 @@ async function tryProspeo(domain, name) {
             return { email, name, title: null };
         }
     } catch (e) {
-        console.log(`[enrich] Prospeo failed: ${e.message}`);
+        if (e.response?.status === 402 || e.response?.status === 429) markExhausted('prospeo');
+        else console.log(`[enrich] Prospeo failed: ${e.message}`);
     }
     return null;
 }
@@ -413,4 +428,4 @@ async function enrichLead(lead) {
     }
 }
 
-module.exports = { enrichLead };
+module.exports = { enrichLead, getCurrentMode };
