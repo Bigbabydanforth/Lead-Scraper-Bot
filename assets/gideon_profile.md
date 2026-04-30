@@ -384,7 +384,7 @@ So we kept going.
 
 This is where it gets serious.
 
-Every morning at 8:00 AM UTC, without anyone pressing a button, the system wakes up on its own. It picks a city and a business category from a rotating list spanning 7 countries — USA, Canada, UK, Australia, New Zealand, Netherlands, Germany — and starts working.
+Every morning at 8:00 AM UTC, without anyone pressing a button, the system wakes up on its own. It picks a city and a business category from a rotating list spanning 18 countries — USA, Canada, UK, Australia, New Zealand, Netherlands, Germany, UAE, Ireland, Singapore, and more — and starts working.
 
 **Step 1 — Discover**
 It scrapes 40 leads from Google Maps. But it's not collecting everything — it filters as it goes. No website? Discarded. Rating below 3.5 stars? Discarded. Already contacted before? Skipped. It only keeps companies worth talking to.
@@ -417,7 +417,7 @@ The tech stack: Node.js for the core engine, Puppeteer for all browser automatio
 
 ### What It Actually Does
 
-Every single day, automatically, this system finds 40 potential clients across 7 countries, filters them down to the legitimate ones, reads their websites, finds the right person to email, researches a specific reason to reach out, writes two personalised emails, sends them, tracks everything, and reports back.
+Every single day, automatically, this system finds 40 potential clients across 18 countries, filters them down to the legitimate ones, reads their websites, finds the right person to email, researches a specific reason to reach out, writes two personalised emails, sends them, tracks everything, and reports back.
 
 No virtual assistant. No manual sourcing. No copy-paste. Just results in the inbox every morning.
 
@@ -609,7 +609,7 @@ So we kept going.
 
 This is where it gets serious.
 
-Every morning at 8:00 AM UTC, without anyone pressing a button, the system wakes up on its own. It picks a city and a business category from a rotating list spanning 7 countries — USA, Canada, UK, Australia, New Zealand, Netherlands, Germany — and starts working.
+Every morning at 8:00 AM UTC, without anyone pressing a button, the system wakes up on its own. It picks a city and a business category from a rotating list spanning 18 countries — USA, Canada, UK, Australia, New Zealand, Netherlands, Germany, UAE, Ireland, Singapore, and more — and starts working.
 
 **Step 1 — Discover**
 It scrapes 40 leads from Google Maps. But it's not collecting everything — it filters as it goes. No website? Discarded. Rating below 3.5 stars? Discarded. Already contacted before? Skipped. It only keeps companies worth talking to.
