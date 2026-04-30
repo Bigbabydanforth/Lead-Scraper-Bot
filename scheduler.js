@@ -10,7 +10,7 @@ const { enrichLead, getCurrentMode } = require('./execution/enrich_leads');
 const { researchCompany } = require('./execution/research_company');
 const { draftEmail } = require('./execution/draft_email');
 const { sendEmails } = require('./execution/send_email');
-const { saveLeadsToAirtable, updateLeadStatus, isLeadAlreadySaved } = require('./execution/airtable_save_leads');
+const { saveLeadsToAirtable, isLeadAlreadySaved } = require('./execution/airtable_save_leads');
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 const TARGETS_FILE = path.join(__dirname, 'targets.json');
@@ -50,6 +50,10 @@ async function runDailyPipeline(overrideService, overrideCity, overrideCount) {
 
         for (const record of queuedRecords) {
             const lead = record.fields;
+            if (!lead.email1_body && !lead.email2_body) {
+                console.log(`[scheduler] Skipping queued lead ${lead.name} — no email body found`);
+                continue;
+            }
             const result = await sendEmails(lead, record.getId());
             if (result.sent) summaryData.queuedSent++;
             summaryData.sentToday += (result.emails_sent_count || 0);

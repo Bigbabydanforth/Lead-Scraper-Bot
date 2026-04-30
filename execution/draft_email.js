@@ -8,10 +8,13 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 async function draftEmail(lead) {
     try {
         // Read governance files first (system architecture rule)
-        fs.readFileSync(path.join(__dirname, '../instructions.md'), 'utf8');
+        fs.readFileSync(path.join(__dirname, '../Instructions.md'), 'utf8');
         fs.readFileSync(path.join(__dirname, '../project_specs.md'), 'utf8');
 
-        if (!lead.automation_opportunities || lead.automation_opportunities.length === 0) {
+        const oppsArray = Array.isArray(lead.automation_opportunities)
+            ? lead.automation_opportunities
+            : (lead.automation_opportunities || '').split('\n').filter(Boolean);
+        if (oppsArray.length === 0) {
             console.log(`[draft_email] Skipping ${lead.name} — no automation opportunities`);
             return null;
         }
@@ -20,78 +23,104 @@ async function draftEmail(lead) {
 
         const dmName = lead.decision_maker_name || "not found";
         const dmTitle = lead.decision_maker_title || "not found";
-        const opsJoined = lead.automation_opportunities.join(", ");
+        const opsJoined = Array.isArray(lead.automation_opportunities)
+            ? lead.automation_opportunities.join(", ")
+            : lead.automation_opportunities;
 
-        const prompt = `You are a professional copywriter helping an AI Automation Engineer send personalized cold outreach emails to potential clients.
+        const prompt = `You are writing cold outreach emails on behalf of Gideon Awotuyi, an AI Automation Engineer looking for his first client.
 
-CRITICAL INSTRUCTION: You have access to the engineer's comprehensive profile below. When drafting emails, you MUST:
-- Reference specific PROJECTS the engineer has built that are relevant to this company
-- Cite measurable RESULTS from their resume (40% reduction, 99% accuracy, etc.) when relevant
-- Mention relevant TECHNICAL SKILLS that solve this company's specific problem
-- NEVER reference course timestamps, syllabus metadata, or training module numbers
-- Focus ONLY on what the engineer can DO and HAS DONE, not what they studied
-
-Here is the company information:
+STEP 1 - READ THE COMPANY DETAILS:
 Company Name: ${lead.name}
 City: ${lead.city}
 Industry: ${lead.service}
 Website: ${lead.website}
 What They Do: ${lead.company_summary}
-Automation Opportunities Identified: ${opsJoined}
-
+Automation Opportunities: ${opsJoined}
 Decision Maker Name: ${dmName}
 Decision Maker Title: ${dmTitle}
 
-Here is the engineer's complete profile (use ONLY the relevant parts):
+STEP 2 - READ GIDEON'S PROFILE AND PICK THE MOST RELEVANT PROJECT:
 ${gideonProfile}
 
-TASK: Write two cold outreach emails as described below. Follow every rule exactly.
+STEP 3 - WRITE TWO EMAILS FOLLOWING THIS EXACT FORMAT:
 
-EMAIL 1 — To the company (company_email):
-- Salutation: "Hi ${lead.name} team,"
-- Reference the company name, city, what they do, and ONE specific automation opportunity from the list above
-- Mention ONE relevant project from the profile that demonstrates similar work has been done before
-- Explain how the problem can be solved in plain, simple terms
-- Include ONE measurable result if relevant (e.g., "40% reduction in manual overhead" or "99% accuracy")
-- 150-180 words. Plain text only.
-- Include LinkedIn and portfolio from the profile
-- Friendly, professional, warm tone
+EMAIL 1 is sent to the company inbox. It must:
+- Open with: "Hi ${lead.name} team,"
+- Sentence 1: mention the company name, city, and what they do in one line
+- Sentences 2-3: name ONE specific automation opportunity from the list and explain the problem it solves in plain human language (no jargon)
+- Sentences 4-5: mention ONE project Gideon actually built that is similar, and include a real measurable result (e.g. "cut manual workload by 40%")
+- Final paragraph: invite a low-pressure conversation and include Gideon's LinkedIn and portfolio link from his profile
+- Second-to-last line must be exactly: "If you'd rather not hear from me, just reply with 'unsubscribe'."
+- Sign off with: "Best," or "Talk soon,"
+- Tone: warm, direct, peer-to-peer. NOT salesy. NOT corporate.
+- Length: 150-180 words maximum
 
-EMAIL 2 — To the decision maker personally (decision_maker_email):
-${dmName !== "not found" ? `- Salutation: "Hi ${dmName.split(' ')[0]}," (first name only)
-- Reference their name, title, and company. Reframe the same opportunity as a personal leadership problem they face
-- Mention ONE relevant project or skill from the profile
-- Include ONE measurable result if relevant
-- 150-180 words. Plain text only.
-- Include LinkedIn and portfolio from the profile
-- Direct, peer-to-peer tone` : `- SKIP — no decision maker found. Set email2_subject and email2_body to null.`}
+EMAIL 2 is sent directly to the decision maker:
+${dmName !== "not found" ? `- Open with: "Hi ${dmName.split(' ')[0]},"
+- Acknowledge their role (${dmTitle}) and the company
+- Reframe the SAME automation opportunity as a PERSONAL problem they face as a leader, not a company problem
+- Reference ONE different project or result from Gideon's profile (NOT the same one used in Email 1)
+- Same tone: direct, peer-to-peer, not salesy
+- Second-to-last line must be exactly: "If you'd rather not hear from me, just reply with 'unsubscribe'."
+- Sign off with: "Best," or "Talk soon,"
+- Length: 150-180 words maximum` : `- SKIP this email. Set email2_subject to null and email2_body to null.`}
 
-STRICT RULES FOR BOTH EMAILS:
-1. Plain text only. No HTML, no bullet points, no markdown, no bold.
-2. NEVER say "I hope this email finds you well"
-3. NEVER use: synergy, leverage (as verb), touch base, circle back, bandwidth, scalable solution
-4. DO NOT mention AI wrote this email
-5. DO NOT reference course names, timestamps, or training module numbers from the profile
-6. DO reference: specific projects (Sections 3 and 4 of profile), measurable results (Section 1), relevant skills
-7. Subject lines must NOT contain: free, guaranteed, opportunity, make money, click here, limited time, exclusive, urgent, act now
-8. Subject lines must use plain ASCII only — no em dashes, en dashes, smart quotes, or any special characters. Use a plain hyphen (-) if you need a dash.
-9. Email body must use plain ASCII only — no em dashes, smart quotes, ellipsis characters, or any other special symbols. Use a plain hyphen (-) for dashes and ... for ellipsis.
-10. On the line directly before the sign-off, add exactly: "If you'd rather not hear from me, just reply with 'unsubscribe'."
-11. Sign off with "Best," or "Talk soon," — not "Best regards"
-12. Both emails must be completely different from each other
-13. Maximum 180 words per email body
+ABSOLUTE RULES - NEVER BREAK THESE:
+1. Plain text only. Zero HTML, zero bullet points, zero markdown, zero bold.
+2. Never write "I hope this email finds you well" or any variation.
+3. Never use: synergy, leverage (as verb), touch base, circle back, bandwidth, scalable solution, game-changer, revolutionize.
+4. Never mention AI wrote this email.
+5. Never reference course names, video timestamps, or training modules. Only reference real projects Gideon built.
+6. Subject lines must NOT contain: free, guaranteed, opportunity, make money, click here, limited time, exclusive, urgent, act now.
+7. Subject lines and bodies must use plain ASCII only. No em dashes (use -), no smart quotes (use '), no ellipsis character (use ...).
+8. Email 1 and Email 2 must be completely different - different opening, different project reference, different angle.
+9. Maximum 180 words per email body.
 
-EXAMPLE OF GOOD PROJECT REFERENCE:
-"I recently built a similar system for WeSki in Israel that reduced their customer success team's manual workload by 40%"
-"I built a lead routing system for a previous client that cut qualification time by 90%"
-"I architected an AI agent that processes 500+ transactions monthly at 99% accuracy"
+HERE IS A CONCRETE EXAMPLE OF WHAT A GOOD EMAIL PAIR LOOKS LIKE:
 
-EXAMPLE OF BAD REFERENCE — DO NOT DO THIS:
-"I completed the n8n AI Agent Deep Dive course (5:04:50 total runtime)"
-"I learned about iterators at timestamp 1:26:53"
+Example Email 1 subject: Automating client onboarding for Acme Staffing - quick idea
+
+Example Email 1 body:
+Hi Acme Staffing team,
+
+I came across your agency in Austin - you're doing solid work connecting companies with great talent, and from what I can tell, your client onboarding process probably involves a lot of manual back-and-forth.
+
+I recently built an automated onboarding workflow for a similar agency using n8n and Claude API that cut their admin team's workload by 40%. Every new client now gets a tailored intake form, automatic follow-up emails, and real-time status updates without anyone on the team touching it manually.
+
+I think something like this could save your team real hours every week. Happy to walk you through it in 20 minutes if you're curious.
+
+Portfolio: gideon.dev | LinkedIn: linkedin.com/in/gideonawotuyi
+
+If you'd rather not hear from me, just reply with 'unsubscribe'.
+
+Best,
+Gideon
+
+---
+
+Example Email 2 subject: A thought on your team's onboarding workload
+
+Example Email 2 body:
+Hi Sarah,
+
+As Head of Operations at Acme Staffing, you're probably the one who feels it most when client onboarding goes sideways - missed follow-ups, documents stuck in email threads, the team asking "where are we with this client?"
+
+I built an end-to-end intake automation for a hiring firm last year. Their new clients go from first contact to fully onboarded with zero manual steps on the team's side. The operations lead told me it freed up 15 hours a week for her team.
+
+I'm not pitching a product. Just offering a practical conversation about whether something similar would help your team at Acme.
+
+Portfolio: gideon.dev | LinkedIn: linkedin.com/in/gideonawotuyi
+
+If you'd rather not hear from me, just reply with 'unsubscribe'.
+
+Talk soon,
+Gideon
+
+---
+
+Now write the actual emails for ${lead.name} following this exact pattern. Replace the example links with the actual LinkedIn and portfolio links from Gideon's profile.
 
 Respond with ONLY a valid JSON object. No explanation. No markdown. No preamble.
-Use this exact structure:
 {
   "email1_subject": "subject line here",
   "email1_body": "full email body here",
@@ -100,7 +129,7 @@ Use this exact structure:
 }`;
 
         const response = await anthropic.messages.create({
-            model: 'claude-sonnet-4-6',
+            model: 'claude-haiku-4-5-20251001',
             max_tokens: 2000,
             messages: [{ role: 'user', content: prompt }]
         });
