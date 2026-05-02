@@ -1,31 +1,31 @@
 const puppeteer = require('puppeteer-core');
 const chromium = require('@sparticuz/chromium');
 
+async function launchBrowser() {
+    return puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+    });
+}
+
 /**
  * Navigates to a company website to extract an email address.
  */
-async function extractEmail(browser, url) {
+async function extractEmail(page, url) {
     if (!url || !url.startsWith('http')) return '';
-
-    let email = '';
-    const page = await browser.newPage();
     try {
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
-
-        email = await page.evaluate(() => {
-            // Priority 1: mailto links
+        return await page.evaluate(() => {
             const mailto = document.querySelector('a[href^="mailto:"]');
             if (mailto) {
                 const raw = mailto.getAttribute('href').replace('mailto:', '').split('?')[0].trim();
                 try { return decodeURIComponent(raw); } catch (_) { return raw; }
             }
-
-            // Priority 2: regex match on body text
             const text = document.body.innerText;
-            // Basic email regex
             const match = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
             if (match) {
-                // Ignore common false positives
                 const val = match[1].toLowerCase();
                 if (!val.endsWith('.png') && !val.endsWith('.jpg') && !val.endsWith('.webp') && !val.endsWith('.gif')) {
                     return val;
@@ -35,39 +35,26 @@ async function extractEmail(browser, url) {
         });
     } catch (e) {
         console.log(`Error extracting email from ${url}:`, e.message);
-    } finally {
-        await page.close().catch(() => { });
+        return '';
     }
-    return email;
 }
 
 /**
- * Scrapes Google Maps for business leads.
- * @param {string} service - The service to search for.
- * @param {string} city - The city to search in.
- * @param {number} count - The exact number of leads to extract.
- * @returns {Promise<Array>} - Array of objects containing lead information.
+ * Phase 1: Collect place URLs from Google Maps, then close browser.
  */
-async function scrapeGoogleMaps(service, city, count) {
+async function collectPlaceUrls(service, city, count) {
     const query = encodeURIComponent(`${service} in ${city}`);
     const url = `https://www.google.com/maps/search/${query}`;
+    const urlsNeeded = Math.min(parseInt(count) * 3 + 10, 60);
 
-    const browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-    });
+    const browser = await launchBrowser();
     const page = await browser.newPage();
 
-    // Set a cookie to bypass Google Consent pages
     await page.setCookie({
         name: 'CONSENT',
         value: 'YES+cb.20230501-07-p0.en+FX+414',
         domain: '.google.com'
     });
-
-    // Set a sensible user agent
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
     console.log(`Navigating to Google Maps: ${url}`);
@@ -75,7 +62,6 @@ async function scrapeGoogleMaps(service, city, count) {
     try {
         await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
 
-        // Handle Google Consent screen if redirected
         if (page.url().includes('consent.google.com')) {
             console.log('Redirected to Google Consent page. Attempting to accept...');
             try {
@@ -86,104 +72,88 @@ async function scrapeGoogleMaps(service, city, count) {
                         b.textContent.includes('I agree') ||
                         b.textContent.includes('Accept')
                     );
-
-                    if (acceptBtn) {
-                        acceptBtn.click();
-                    } else {
-                        const forms = document.querySelectorAll('form');
-                        if (forms.length > 0) forms[0].submit();
-                    }
+                    if (acceptBtn) acceptBtn.click();
+                    else { const forms = document.querySelectorAll('form'); if (forms.length > 0) forms[0].submit(); }
                 });
-                console.log('Submitted consent, waiting for navigation...');
                 await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 });
             } catch (e) {
                 console.log('Error bypassing consent:', e);
             }
         }
 
-        // Wait for results container or similar element to appear
         try {
             await page.waitForSelector('a[href*="/maps/place/"]', { timeout: 15000 });
         } catch (e) {
-            console.log("Could not find standard places link. Dumping HTML to .tmp/debug.html");
-            const fs = require('fs');
-            const path = require('path');
-            const tmpDir = path.join(__dirname, '..', '.tmp');
-            if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir);
-            fs.writeFileSync(path.join(tmpDir, 'debug.html'), await page.content());
-            throw new Error("Failed to find results. See .tmp/debug.html");
+            console.log("Could not find standard places link.");
+            await browser.close();
+            return [];
         }
 
         const placeUrls = new Set();
         let attempts = 0;
-        const maxAttempts = parseInt(count) * 5; // scroll more times to gather URLs
-        const urlsNeeded = parseInt(count) * 10 + 20; // buffer since many might lack emails
+        const maxAttempts = parseInt(count) * 4;
 
         while (placeUrls.size < urlsNeeded && attempts < maxAttempts) {
             attempts++;
-
             const urls = await page.evaluate(() => {
-                const results = [];
                 const items = document.querySelectorAll('a[href*="/maps/place/"]');
-                for (const item of items) {
-                    if (item.href) results.push(item.href);
-                }
-                return results;
+                return Array.from(items).map(i => i.href).filter(Boolean);
             });
-
-            urls.forEach(url => placeUrls.add(url));
-
+            urls.forEach(u => placeUrls.add(u));
             if (placeUrls.size >= urlsNeeded) break;
 
-            // Scroll down to load more using the feed container
             const canScroll = await page.evaluate(() => {
                 const feed = document.querySelector('div[role="feed"]');
-                if (feed) {
-                    feed.scrollBy(0, feed.clientHeight);
-                    return true;
-                }
+                if (feed) { feed.scrollBy(0, feed.clientHeight); return true; }
                 return false;
             });
-
             if (!canScroll) break;
-
-            // Wait for new items to load
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise(r => setTimeout(r, 2000));
         }
 
-        console.log(`Gathered ${placeUrls.size} place URLs. Extracting details...`);
-        const leads = [];
+        console.log(`Gathered ${placeUrls.size} place URLs. Closing Maps browser...`);
+        return Array.from(placeUrls);
+    } finally {
+        await browser.close();
+    }
+}
 
-        for (const url of Array.from(placeUrls)) {
+/**
+ * Phase 2: Visit each place URL in a fresh browser and extract lead details.
+ */
+async function extractLeadDetails(placeUrls, service, city, count) {
+    const browser = await launchBrowser();
+    const page = await browser.newPage();
+    page.setDefaultNavigationTimeout(15000);
+
+    const leads = [];
+
+    try {
+        for (const url of placeUrls) {
             if (leads.length >= count) break;
 
             try {
                 await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
-                // We just wait for the h1 to appear, which means the place loaded
-                await page.waitForSelector('h1', { timeout: 5000 }).catch(() => { });
+                await page.waitForSelector('h1', { timeout: 5000 }).catch(() => {});
 
                 const details = await page.evaluate(() => {
                     const nameEl = document.querySelector('h1');
                     const name = nameEl ? nameEl.textContent.trim() : '';
-
                     const ratingEl = document.querySelector('div.fontDisplayLarge');
                     const rating = ratingEl ? ratingEl.textContent.trim() : '';
-
                     const websiteEl = document.querySelector('a[data-item-id="authority"]');
                     const website = websiteEl ? websiteEl.getAttribute('href') : '';
-
                     const addressEl = document.querySelector('button[data-item-id="address"]');
                     const address = addressEl ? addressEl.textContent.trim() : '';
-
                     return { name, rating, website, address };
                 });
 
                 const ratingNum = parseFloat(details.rating);
                 const hasValidRating = !isNaN(ratingNum) && ratingNum >= 3.5;
-                const hasNoRating = isNaN(ratingNum); // New business with no reviews yet
+                const hasNoRating = isNaN(ratingNum);
 
                 if (details.name && details.website && (hasValidRating || hasNoRating)) {
-                    const email = await extractEmail(browser, details.website) || "";
+                    const email = await extractEmail(page, details.website) || '';
                     leads.push({
                         name: details.name,
                         service: service,
@@ -191,12 +161,12 @@ async function scrapeGoogleMaps(service, city, count) {
                         website: details.website,
                         email: email,
                         city: city,
-                        rating: details.rating || "No rating",
+                        rating: details.rating || 'No rating',
                         date_created: new Date().toISOString().split('T')[0],
                         status: 'lead'
                     });
                     const ratingLabel = hasNoRating ? 'No rating' : `⭐${ratingNum}`;
-                    console.log(`Found qualified lead: ${details.name} ${ratingLabel} (Email: ${email || "None, passed to enrichment"})`);
+                    console.log(`Found qualified lead: ${details.name} ${ratingLabel} (Email: ${email || 'None, passed to enrichment'})`);
                 } else {
                     console.log(`Discarded ${details.name} (no website, or rating below 3.5)`);
                 }
@@ -204,17 +174,21 @@ async function scrapeGoogleMaps(service, city, count) {
                 console.log(`Error navigating to place page: ${e.message}`);
             }
         }
-
+    } finally {
         await browser.close();
-
-        // Return exactly count leads
-        return leads.slice(0, count);
-
-    } catch (e) {
-        console.error("Error scraping Google Maps:", e);
-        await browser.close();
-        throw e;
     }
+
+    return leads.slice(0, count);
+}
+
+/**
+ * Scrapes Google Maps for business leads.
+ */
+async function scrapeGoogleMaps(service, city, count) {
+    const placeUrls = await collectPlaceUrls(service, city, parseInt(count));
+    if (placeUrls.length === 0) throw new Error('No place URLs collected from Google Maps.');
+    console.log(`Extracting details from ${placeUrls.length} URLs...`);
+    return await extractLeadDetails(placeUrls, service, city, parseInt(count));
 }
 
 module.exports = { scrapeGoogleMaps };
@@ -236,11 +210,8 @@ if (require.main === module) {
         console.log(leads);
 
         if (leads.length > 0) {
-            // Ensure .tmp exists
             const tmpDir = path.join(__dirname, '..', '.tmp');
-            if (!fs.existsSync(tmpDir)) {
-                fs.mkdirSync(tmpDir);
-            }
+            if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir);
 
             const csvPath = path.join(tmpDir, 'test_leads.csv');
             const csvWriter = createObjectCsvWriter({
@@ -256,13 +227,7 @@ if (require.main === module) {
                     { id: 'status', title: 'Status' }
                 ]
             });
-
-            csvWriter.writeRecords(leads)
-                .then(() => {
-                    console.log(`Successfully saved to ${csvPath}`);
-                });
+            csvWriter.writeRecords(leads).then(() => console.log(`Saved to ${csvPath}`));
         }
-    }).catch(err => {
-        console.error("Failed to run test:", err);
-    });
+    }).catch(err => console.error('Failed:', err));
 }
