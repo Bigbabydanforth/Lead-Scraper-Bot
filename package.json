@@ -4,8 +4,7 @@
   "description": "Telegram Lead Scraper Bot",
   "main": "bot.js",
   "scripts": {
-    "start": "node bot.js",
-    "postinstall": "npx puppeteer browsers install chrome"
+    "start": "node bot.js"
   },
   "keywords": [],
   "author": "",
@@ -15,13 +14,14 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
+    "@sparticuz/chromium": "^148.0.0",
     "airtable": "^0.12.2",
     "axios": "^1.15.2",
     "csv-writer": "^1.6.0",
     "dotenv": "^17.3.1",
     "googleapis": "^171.4.0",
     "node-cron": "^4.2.1",
-    "puppeteer": "^24.39.0",
+    "puppeteer-core": "^24.42.0",
     "telegraf": "^4.16.3"
   }
 }
