@@ -331,6 +331,9 @@ ${oppLines}
 }
 
 cron.schedule('0 8 * * *', runDailyPipeline);
-console.log('[scheduler] Daily pipeline scheduled for 08:00 UTC');
+console.log('[scheduler] Morning pipeline scheduled for 08:00 UTC');
+
+cron.schedule('0 14 * * *', runDailyPipeline);
+console.log('[scheduler] Afternoon pipeline scheduled for 14:00 UTC');
 
 module.exports = { runDailyPipeline };
