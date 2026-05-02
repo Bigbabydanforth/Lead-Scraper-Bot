@@ -449,8 +449,8 @@ Target regions and service types are stored in `targets.json` at root level.
 This file is editable without touching code.
 
 
-Primary countries: USA, Canada, UK, Australia, New Zealand, Netherlands, Germany
-Secondary countries: Switzerland, Sweden, Israel, Ukraine, Russia
+Primary countries: USA, Canada, UK, Australia, New Zealand, Netherlands, Germany, UAE, Ireland, Singapore
+Secondary countries: Switzerland, Sweden, Israel, Denmark, Norway, Portugal, Poland, Estonia
 
 
 Service categories to search (starting list — editable):

@@ -1,4 +1,5 @@
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
+const chromium = require('@sparticuz/chromium');
 
 /**
  * Navigates to a company website to extract an email address.
@@ -15,7 +16,8 @@ async function extractEmail(browser, url) {
             // Priority 1: mailto links
             const mailto = document.querySelector('a[href^="mailto:"]');
             if (mailto) {
-                return mailto.getAttribute('href').replace('mailto:', '').split('?')[0].trim();
+                const raw = mailto.getAttribute('href').replace('mailto:', '').split('?')[0].trim();
+                try { return decodeURIComponent(raw); } catch (_) { return raw; }
             }
 
             // Priority 2: regex match on body text
@@ -51,8 +53,10 @@ async function scrapeGoogleMaps(service, city, count) {
     const url = `https://www.google.com/maps/search/${query}`;
 
     const browser = await puppeteer.launch({
-        headless: "new",
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
     });
     const page = await browser.newPage();
 
@@ -174,25 +178,27 @@ async function scrapeGoogleMaps(service, city, count) {
                     return { name, rating, website, address };
                 });
 
-                if (details.name && details.website && details.rating) {
-                    const email = await extractEmail(browser, details.website);
-                    if (email) {
-                        leads.push({
-                            name: details.name,
-                            service: service,
-                            address: details.address || `Located in ${city}`,
-                            website: details.website,
-                            email: email,
-                            rating: details.rating,
-                            date_created: new Date().toISOString().split('T')[0],
-                            status: 'lead'
-                        });
-                        console.log(`Found qualified lead: ${details.name} (Email: ${email})`);
-                    } else {
-                        console.log(`Discarded ${details.name} (No email found on website)`);
-                    }
+                const ratingNum = parseFloat(details.rating);
+                const hasValidRating = !isNaN(ratingNum) && ratingNum >= 3.5;
+                const hasNoRating = isNaN(ratingNum); // New business with no reviews yet
+
+                if (details.name && details.website && (hasValidRating || hasNoRating)) {
+                    const email = await extractEmail(browser, details.website) || "";
+                    leads.push({
+                        name: details.name,
+                        service: service,
+                        address: details.address || `Located in ${city}`,
+                        website: details.website,
+                        email: email,
+                        city: city,
+                        rating: details.rating || "No rating",
+                        date_created: new Date().toISOString().split('T')[0],
+                        status: 'lead'
+                    });
+                    const ratingLabel = hasNoRating ? 'No rating' : `⭐${ratingNum}`;
+                    console.log(`Found qualified lead: ${details.name} ${ratingLabel} (Email: ${email || "None, passed to enrichment"})`);
                 } else {
-                    console.log(`Discarded ${details.name} (Missing website or rating on Google Maps)`);
+                    console.log(`Discarded ${details.name} (no website, or rating below 3.5)`);
                 }
             } catch (e) {
                 console.log(`Error navigating to place page: ${e.message}`);

@@ -319,8 +319,8 @@ This file controls what the scheduler searches each day.
 Structure:
 ```json
 {
-  "primary_countries": ["USA", "Canada", "UK", "Australia", "New Zealand", "Netherlands", "Germany"],
-  "secondary_countries": ["Switzerland", "Sweden", "Israel", "Ukraine", "Russia"],
+  "primary_countries": ["USA", "Canada", "UK", "Australia", "New Zealand", "Netherlands", "Germany", "UAE", "Ireland", "Singapore"],
+  "secondary_countries": ["Switzerland", "Sweden", "Israel", "Denmark", "Norway", "Portugal", "Poland", "Estonia"],
   "service_categories": [
     "SaaS startups",
     "eCommerce brands",

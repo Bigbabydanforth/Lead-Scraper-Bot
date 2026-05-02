@@ -1,6 +1,32 @@
 require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
 const { Telegraf } = require('telegraf');
+const { message } = require('telegraf/filters');
 const Anthropic = require('@anthropic-ai/sdk');
+
+// ─── SINGLETON GUARD ────────────────────────────────────────────────────────
+// Prevents multiple instances from running simultaneously.
+// Each extra instance = extra cron jobs + duplicate pipelines + wasted tokens.
+const PID_FILE = path.join(__dirname, '.tmp', 'bot.pid');
+(function enforceSingleton() {
+    const tmpDir = path.join(__dirname, '.tmp');
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+
+    if (fs.existsSync(PID_FILE)) {
+        const existingPid = parseInt(fs.readFileSync(PID_FILE, 'utf8').trim(), 10);
+        try {
+            process.kill(existingPid, 0); // throws if process no longer exists
+            console.error(`[bot] Already running (PID ${existingPid}). Exiting to prevent duplicate pipelines.`);
+            process.exit(1);
+        } catch (_) {
+            console.log(`[bot] Stale lock found (PID ${existingPid} is gone). Starting fresh.`);
+        }
+    }
+
+    fs.writeFileSync(PID_FILE, String(process.pid));
+    console.log(`[bot] Instance started (PID ${process.pid})`);
+})();
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -10,8 +36,9 @@ bot.start((ctx) => ctx.reply('Welcome! I am the Lead Scraper Bot. Send me a prom
 const { scrapeGoogleMaps } = require('./execution/scrape_google_maps');
 const { saveLeadsToAirtable } = require('./execution/airtable_save_leads');
 const { searchLeadsInAirtable } = require('./execution/airtable_search_leads');
+const { runDailyPipeline } = require('./scheduler.js');
 
-bot.on('text', async (ctx) => {
+bot.on(message('text'), async (ctx) => {
     const userMessage = ctx.message.text;
     const msg = await ctx.reply("Thinking...");
 
@@ -23,12 +50,14 @@ The user might just be chatting with you, or they might be asking you to perform
 The available tasks are:
 1. "scrape": Scrape new leads from Google Maps and save them to Airtable.
 2. "search": Search existing leads in Airtable.
+3. "run_outreach": Triggered when the user says something like: "Run outreach today", "Start outreach", "Run the pipeline", "Send emails today".
+4. "run_outreach_targeted": Triggered when the user says something like: "Find 10 SaaS companies in Austin and send outreach", "Run outreach for marketing agencies in London".
 
 User Message: "${userMessage}"
 
 Analyze the message. If the user wants to perform a task, output ONLY a valid JSON object with the following structure:
 {
-  "workflow": "scrape" or "search",
+  "workflow": "scrape" | "search" | "run_outreach" | "run_outreach_targeted",
   "arguments": {
      // If workflow is "scrape", include:
      "service": string (e.g. "plumbers"),
@@ -42,6 +71,11 @@ Analyze the message. If the user wants to perform a task, output ONLY a valid JS
      "minimum_rating": number (optional),
      "status": string (optional),
      "count": number (e.g. 5, default to 5)
+     
+     // If workflow is "run_outreach_targeted", include:
+     "service": string,
+     "city": string,
+     "count": number (Always default to 15 if not specified)
   }
 }
 
@@ -54,7 +88,7 @@ If the user is just chatting or asking a question that doesn't strictly match th
 Do not include markdown blocks like \`\`\`json or any other text outside the JSON object. Output ONLY the raw JSON.`;
 
         const response = await anthropic.messages.create({
-            model: 'claude-sonnet-4-6',
+            model: 'claude-haiku-4-5-20251001',
             max_tokens: 1024,
             messages: [{ role: 'user', content: prompt }]
         });
@@ -64,7 +98,14 @@ Do not include markdown blocks like \`\`\`json or any other text outside the JSO
             respText = respText.replace(/^\`\`\`json\n?/, '').replace(/\n?\`\`\`$/, '');
         }
 
-        const plan = JSON.parse(respText);
+        let plan;
+        try {
+            plan = JSON.parse(respText);
+        } catch (parseErr) {
+            console.error('[bot] Claude returned invalid JSON:', respText);
+            await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, undefined, "I had trouble understanding that. Please try rephrasing.");
+            return;
+        }
 
         if (plan.workflow === 'scrape') {
             await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, undefined,
@@ -124,6 +165,17 @@ Do not include markdown blocks like \`\`\`json or any other text outside the JSO
                 // we can just edit the "Thinking..." message instead of replying anew.
                 await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, undefined, messageChunk);
             }
+        } else if (plan.workflow === 'run_outreach') {
+            await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, undefined, 
+                "🚀 Starting daily outreach pipeline... This may take a while. I'll send you a full report when it's done.");
+            
+            runDailyPipeline().catch(err => console.error("Pipeline error:", err));
+        } else if (plan.workflow === 'run_outreach_targeted') {
+            const { service, city, count } = plan.arguments;
+            await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, undefined, 
+                `🚀 Starting targeted outreach for ${service} in ${city}... I'll update you when it's done.`);
+            
+            runDailyPipeline(service, city, count).catch(err => console.error("Pipeline error:", err));
         } else if (plan.workflow === 'chat') {
             await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, undefined, plan.response);
         } else {
@@ -136,7 +188,7 @@ Do not include markdown blocks like \`\`\`json or any other text outside the JSO
     }
 });
 
-// Railway provides process.env.PORT, otherwise default to 3000
+// Heroku provides process.env.PORT, otherwise default to 3000
 const port = process.env.PORT || 3000;
 
 // Always use long polling to prevent Telegram Webhook timeout loops on long scrapes.
@@ -150,7 +202,7 @@ bot.launch({ dropPendingUpdates: true }).then(() => {
 // Since Railway expects an HTTP server to bind to the PORT if a public domain is assigned,
 // we spin up a dummy server that just returns HTTP 200 OK.
 const http = require('http');
-const server = http.createServer((req, res) => {
+const server = http.createServer((_req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('Telegram Scraper Bot is healthy and polling in the background.\n');
 });
@@ -160,5 +212,5 @@ server.listen(port, () => {
 });
 
 // Enable graceful stop
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+process.once('SIGINT', () => { try { fs.unlinkSync(PID_FILE); } catch (_) {} bot.stop('SIGINT'); });
+process.once('SIGTERM', () => { try { fs.unlinkSync(PID_FILE); } catch (_) {} bot.stop('SIGTERM'); });

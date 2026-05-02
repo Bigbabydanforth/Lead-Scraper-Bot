@@ -1,0 +1,136 @@
+{
+  "primary_countries": [
+    "USA",
+    "Canada",
+    "UK",
+    "Australia",
+    "New Zealand",
+    "Netherlands",
+    "Germany",
+    "UAE",
+    "Ireland",
+    "Singapore"
+  ],
+  "secondary_countries": [
+    "Switzerland",
+    "Sweden",
+    "Israel",
+    "Denmark",
+    "Norway",
+    "Portugal",
+    "Poland",
+    "Estonia"
+  ],
+  "cities": {
+    "USA": [
+      "New York",
+      "Austin",
+      "San Francisco",
+      "Portland",
+      "Chicago",
+      "Los Angeles",
+      "Seattle",
+      "Miami",
+      "Boston"
+    ],
+    "Canada": [
+      "Toronto",
+      "Vancouver",
+      "Montreal",
+      "Calgary"
+    ],
+    "UK": [
+      "London",
+      "Manchester",
+      "Birmingham",
+      "Edinburgh"
+    ],
+    "Australia": [
+      "Sydney",
+      "Melbourne",
+      "Brisbane",
+      "Perth"
+    ],
+    "New Zealand": [
+      "Auckland",
+      "Wellington"
+    ],
+    "Netherlands": [
+      "Amsterdam",
+      "Rotterdam"
+    ],
+    "Germany": [
+      "Berlin",
+      "Munich",
+      "Hamburg"
+    ],
+    "UAE": [
+      "Dubai",
+      "Abu Dhabi",
+      "Sharjah",
+      "Ajman",
+      "Ras Al Khaimah"
+    ],
+    "Ireland": [
+      "Dublin",
+      "Cork"
+    ],
+    "Singapore": [
+      "Singapore"
+    ],
+    "Switzerland": [
+      "Zurich",
+      "Geneva"
+    ],
+    "Sweden": [
+      "Stockholm",
+      "Gothenburg"
+    ],
+    "Israel": [
+      "Tel Aviv",
+      "Jerusalem"
+    ],
+    "Denmark": [
+      "Copenhagen",
+      "Aarhus"
+    ],
+    "Norway": [
+      "Oslo",
+      "Bergen"
+    ],
+    "Portugal": [
+      "Lisbon",
+      "Porto"
+    ],
+    "Poland": [
+      "Warsaw",
+      "Krakow",
+      "Wroclaw"
+    ],
+    "Estonia": [
+      "Tallinn"
+    ]
+  },
+  "service_categories": [
+    "SaaS startups",
+    "eCommerce brands",
+    "marketing agencies",
+    "tech companies",
+    "recruitment agencies",
+    "real estate agencies",
+    "law firms",
+    "accounting firms",
+    "healthcare clinics",
+    "travel companies",
+    "travel agencies",
+    "logistics companies",
+    "insurance brokers",
+    "property management companies"
+  ],
+  "leads_per_run": 15,
+  "scrape_buffer": 40,
+  "rotation": "sequential",
+  "current_country_index": 0,
+  "current_city_index": 0,
+  "current_service_index": 2
+}
