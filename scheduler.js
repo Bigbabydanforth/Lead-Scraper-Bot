@@ -96,6 +96,7 @@ async function runDailyPipeline(overrideService, overrideCity, overrideCount) {
         const cIndex = (targets.current_city_index || 0) % citiesList.length;
 
         // Service advances once per calendar day — both AM and PM runs share the same niche.
+        // City stays the same all day and only moves once all 14 niches are done.
         const today = new Date().toISOString().split('T')[0];
         let sIndex;
         if (targets.last_niche_date !== today) {
@@ -103,6 +104,18 @@ async function runDailyPipeline(overrideService, overrideCity, overrideCount) {
             targets.current_service_index = sIndex;
             targets.last_niche_date = today;
             console.log(`[scheduler] New day — advancing to niche ${sIndex}`);
+
+            // Move to next city only after all niches have been covered in this one
+            if (sIndex === 0) {
+                const nextCIndex = cIndex + 1;
+                if (nextCIndex >= citiesList.length) {
+                    targets.current_city_index = 0;
+                    targets.current_country_index = (countryIndex + 1) % allCountries.length;
+                } else {
+                    targets.current_city_index = nextCIndex;
+                    targets.current_country_index = countryIndex;
+                }
+            }
         } else {
             sIndex = (targets.current_service_index || 0) % targets.service_categories.length;
             console.log(`[scheduler] Same day — reusing niche ${sIndex}`);
@@ -114,16 +127,6 @@ async function runDailyPipeline(overrideService, overrideCity, overrideCount) {
         dailyTarget = targets.leads_per_run || 15;
 
         console.log(`[scheduler] Today's target: ${service} in ${city}, ${country}`);
-
-        // City advances after every run so AM and PM never scrape the same location.
-        const nextCIndex = cIndex + 1;
-        if (nextCIndex >= citiesList.length) {
-            targets.current_city_index = 0;
-            targets.current_country_index = (countryIndex + 1) % allCountries.length;
-        } else {
-            targets.current_city_index = nextCIndex;
-            targets.current_country_index = countryIndex;
-        }
 
         fs.writeFileSync(TARGETS_FILE, JSON.stringify(targets, null, 2));
     }
