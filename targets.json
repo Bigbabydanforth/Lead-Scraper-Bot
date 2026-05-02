@@ -128,9 +128,9 @@
     "property management companies"
   ],
   "leads_per_run": 15,
-  "scrape_buffer": 40,
+  "scrape_buffer": 20,
   "rotation": "sequential",
   "current_country_index": 0,
   "current_city_index": 0,
-  "current_service_index": 2
+  "current_service_index": 8
 }
