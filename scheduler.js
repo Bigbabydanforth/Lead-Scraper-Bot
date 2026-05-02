@@ -85,9 +85,8 @@ async function runDailyPipeline(overrideService, overrideCity, overrideCount) {
             ...(targets.primary_countries || []),
             ...(targets.secondary_countries || [])
         ];
-        
+
         const countryIndex = (targets.current_country_index || 0) % allCountries.length;
-        const sIndex = (targets.current_service_index || 0) % targets.service_categories.length;
         const country = allCountries[countryIndex];
         const citiesList = targets.cities[country];
         if (!citiesList || citiesList.length === 0) {
@@ -95,30 +94,35 @@ async function runDailyPipeline(overrideService, overrideCity, overrideCount) {
             return;
         }
         const cIndex = (targets.current_city_index || 0) % citiesList.length;
-        
+
+        // Service advances once per calendar day — both AM and PM runs share the same niche.
+        const today = new Date().toISOString().split('T')[0];
+        let sIndex;
+        if (targets.last_niche_date !== today) {
+            sIndex = ((targets.current_service_index || 0) + 1) % targets.service_categories.length;
+            targets.current_service_index = sIndex;
+            targets.last_niche_date = today;
+            console.log(`[scheduler] New day — advancing to niche ${sIndex}`);
+        } else {
+            sIndex = (targets.current_service_index || 0) % targets.service_categories.length;
+            console.log(`[scheduler] Same day — reusing niche ${sIndex}`);
+        }
+
         city = citiesList[cIndex];
         service = targets.service_categories[sIndex];
-        countToScrape = targets.scrape_buffer || 40;
+        countToScrape = targets.scrape_buffer || 20;
         dailyTarget = targets.leads_per_run || 15;
 
         console.log(`[scheduler] Today's target: ${service} in ${city}, ${country}`);
 
-        // Country-first saturation: run all 12 niches in one city before moving to the next.
-        // Service index advances every day. City only advances when all niches are done.
-        const nextSIndex = (sIndex + 1) % targets.service_categories.length;
-        targets.current_service_index = nextSIndex;
-
-        if (nextSIndex === 0) {
-            // Completed all niches for this city — move to the next city
-            const nextCIndex = cIndex + 1;
-            if (nextCIndex >= citiesList.length) {
-                // Exhausted all cities in this country — move to next country
-                targets.current_city_index = 0;
-                targets.current_country_index = (countryIndex + 1) % allCountries.length;
-            } else {
-                targets.current_city_index = nextCIndex;
-                targets.current_country_index = countryIndex;
-            }
+        // City advances after every run so AM and PM never scrape the same location.
+        const nextCIndex = cIndex + 1;
+        if (nextCIndex >= citiesList.length) {
+            targets.current_city_index = 0;
+            targets.current_country_index = (countryIndex + 1) % allCountries.length;
+        } else {
+            targets.current_city_index = nextCIndex;
+            targets.current_country_index = countryIndex;
         }
 
         fs.writeFileSync(TARGETS_FILE, JSON.stringify(targets, null, 2));
