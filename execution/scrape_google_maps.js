@@ -135,60 +135,67 @@ async function collectPlaceUrls(service, city, count) {
  * Phase 2: Visit each place URL in a fresh browser and extract lead details.
  */
 async function extractLeadDetails(placeUrls, service, city, count) {
-    const browser = await launchBrowser();
-    const page = await newLeanPage(browser);
-
     const leads = [];
+    const BATCH_SIZE = 5; // restart browser every 5 URLs to keep memory flat
 
-    try {
-        for (const url of placeUrls) {
-            if (leads.length >= count) break;
+    for (let i = 0; i < placeUrls.length; i += BATCH_SIZE) {
+        if (leads.length >= count) break;
 
-            try {
-                await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
-                await page.waitForSelector('h1', { timeout: 5000 }).catch(() => {});
+        const batch = placeUrls.slice(i, i + BATCH_SIZE);
+        const browser = await launchBrowser();
+        const page = await newLeanPage(browser);
 
-                const details = await page.evaluate(() => {
-                    const nameEl = document.querySelector('h1');
-                    const name = nameEl ? nameEl.textContent.trim() : '';
-                    const ratingEl = document.querySelector('div.fontDisplayLarge');
-                    const rating = ratingEl ? ratingEl.textContent.trim() : '';
-                    const websiteEl = document.querySelector('a[data-item-id="authority"]');
-                    const website = websiteEl ? websiteEl.getAttribute('href') : '';
-                    const addressEl = document.querySelector('button[data-item-id="address"]');
-                    const address = addressEl ? addressEl.textContent.trim() : '';
-                    return { name, rating, website, address };
-                });
+        try {
+            for (const url of batch) {
+                if (leads.length >= count) break;
 
-                const ratingNum = parseFloat(details.rating);
-                const hasValidRating = !isNaN(ratingNum) && ratingNum >= 3.5;
-                const hasNoRating = isNaN(ratingNum);
+                try {
+                    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+                    await page.waitForSelector('h1', { timeout: 5000 }).catch(() => {});
 
-                if (details.name && details.website && (hasValidRating || hasNoRating)) {
-                    const email = await extractEmail(page, details.website) || '';
-                    leads.push({
-                        name: details.name,
-                        service: service,
-                        address: details.address || `Located in ${city}`,
-                        website: details.website,
-                        email: email,
-                        city: city,
-                        rating: details.rating || 'No rating',
-                        date_created: new Date().toISOString().split('T')[0],
-                        status: 'lead'
+                    const details = await page.evaluate(() => {
+                        const nameEl = document.querySelector('h1');
+                        const name = nameEl ? nameEl.textContent.trim() : '';
+                        const ratingEl = document.querySelector('div.fontDisplayLarge');
+                        const rating = ratingEl ? ratingEl.textContent.trim() : '';
+                        const websiteEl = document.querySelector('a[data-item-id="authority"]');
+                        const website = websiteEl ? websiteEl.getAttribute('href') : '';
+                        const addressEl = document.querySelector('button[data-item-id="address"]');
+                        const address = addressEl ? addressEl.textContent.trim() : '';
+                        return { name, rating, website, address };
                     });
-                    const ratingLabel = hasNoRating ? 'No rating' : `⭐${ratingNum}`;
-                    console.log(`Found qualified lead: ${details.name} ${ratingLabel} (Email: ${email || 'None, passed to enrichment'})`);
-                    if (leads.length >= count) break;
-                } else {
-                    console.log(`Discarded ${details.name} (no website, or rating below 3.5)`);
+
+                    const ratingNum = parseFloat(details.rating);
+                    const hasValidRating = !isNaN(ratingNum) && ratingNum >= 3.5;
+                    const hasNoRating = isNaN(ratingNum);
+
+                    if (details.name && details.website && (hasValidRating || hasNoRating)) {
+                        const email = await extractEmail(page, details.website) || '';
+                        leads.push({
+                            name: details.name,
+                            service: service,
+                            address: details.address || `Located in ${city}`,
+                            website: details.website,
+                            email: email,
+                            city: city,
+                            rating: details.rating || 'No rating',
+                            date_created: new Date().toISOString().split('T')[0],
+                            status: 'lead'
+                        });
+                        const ratingLabel = hasNoRating ? 'No rating' : `⭐${ratingNum}`;
+                        console.log(`Found qualified lead: ${details.name} ${ratingLabel} (Email: ${email || 'None, passed to enrichment'})`);
+                        if (leads.length >= count) break;
+                    } else {
+                        console.log(`Discarded ${details.name} (no website, or rating below 3.5)`);
+                    }
+                } catch (e) {
+                    console.log(`Error navigating to place page: ${e.message}`);
                 }
-            } catch (e) {
-                console.log(`Error navigating to place page: ${e.message}`);
             }
+        } finally {
+            await browser.close();
+            console.log(`[scraper] Browser batch closed (${leads.length}/${count} leads so far)`);
         }
-    } finally {
-        await browser.close();
     }
 
     return leads.slice(0, count);
