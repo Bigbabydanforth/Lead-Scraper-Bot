@@ -4,10 +4,23 @@ const chromium = require('@sparticuz/chromium');
 async function launchBrowser() {
     return puppeteer.launch({
         args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
+        defaultViewport: { width: 1280, height: 800 },
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
     });
+}
+
+const BLOCKED_TYPES = new Set(['image', 'stylesheet', 'font', 'media', 'other']);
+
+async function newLeanPage(browser) {
+    const page = await browser.newPage();
+    await page.setRequestInterception(true);
+    page.on('request', req => {
+        if (BLOCKED_TYPES.has(req.resourceType())) req.abort();
+        else req.continue();
+    });
+    page.setDefaultNavigationTimeout(15000);
+    return page;
 }
 
 /**
@@ -48,7 +61,7 @@ async function collectPlaceUrls(service, city, count) {
     const urlsNeeded = Math.min(parseInt(count) * 3 + 10, 60);
 
     const browser = await launchBrowser();
-    const page = await browser.newPage();
+    const page = await newLeanPage(browser);
 
     await page.setCookie({
         name: 'CONSENT',
@@ -123,8 +136,7 @@ async function collectPlaceUrls(service, city, count) {
  */
 async function extractLeadDetails(placeUrls, service, city, count) {
     const browser = await launchBrowser();
-    const page = await browser.newPage();
-    page.setDefaultNavigationTimeout(15000);
+    const page = await newLeanPage(browser);
 
     const leads = [];
 
