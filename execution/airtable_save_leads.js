@@ -28,6 +28,7 @@ async function saveLeadsToAirtable(leads) {
 
     let insertedCount = 0;
     const errors = [];
+    const insertedRecords = [];
 
     for (const chunk of chunkedLeads) {
         const recordsToCreate = chunk.map(lead => {
@@ -47,6 +48,28 @@ async function saveLeadsToAirtable(leads) {
                 fields.rating = ratingNum;
             }
 
+            // Add Phase 2 fields optionally
+            if (lead.company_email) fields.company_email = lead.company_email;
+            if (lead.company_summary) fields.company_summary = lead.company_summary;
+            if (lead.decision_maker_name) fields.decision_maker_name = lead.decision_maker_name;
+            if (lead.decision_maker_title) fields.decision_maker_title = lead.decision_maker_title;
+            if (lead.decision_maker_email) fields.decision_maker_email = lead.decision_maker_email;
+            
+            if (lead.automation_opportunities && lead.automation_opportunities.length > 0) {
+                fields.automation_opportunities = Array.isArray(lead.automation_opportunities) 
+                    ? lead.automation_opportunities.join('\n') 
+                    : lead.automation_opportunities;
+            }
+
+            if (lead.email1_subject) fields.email1_subject = lead.email1_subject;
+            if (lead.email1_body) fields.email1_body = lead.email1_body;
+            if (lead.email2_subject) fields.email2_subject = lead.email2_subject;
+            if (lead.email2_body) fields.email2_body = lead.email2_body;
+            if (lead.email_sent !== undefined && lead.email_sent !== null) fields.email_sent = lead.email_sent;
+            if (lead.sent_at) fields.sent_at = lead.sent_at;
+            if (lead.email_status) fields.email_status = lead.email_status;
+            if (lead.skip_reason) fields.skip_reason = lead.skip_reason;
+
             return { fields };
         });
 
@@ -58,6 +81,7 @@ async function saveLeadsToAirtable(leads) {
                         return;
                     }
                     insertedCount += records.length;
+                    insertedRecords.push(...records);
                     resolve(records);
                 });
             });
@@ -70,11 +94,71 @@ async function saveLeadsToAirtable(leads) {
     return {
         success: errors.length === 0,
         inserted: insertedCount,
-        errors: errors
+        errors: errors,
+        records: insertedRecords
     };
 }
 
-module.exports = { saveLeadsToAirtable };
+/**
+ * Updates an existing lead record in Airtable with specific fields.
+ * @param {string} recordId - The Airtable record ID
+ * @param {Object} updates - Object containing the fields to update
+ */
+async function updateLeadStatus(recordId, updates) {
+    if (!process.env.AIRTABLE_PERSONAL_ACCESS_TOKEN || !process.env.AIRTABLE_BASE_ID || !process.env.AIRTABLE_TABLE_NAME) {
+        throw new Error("Missing Airtable environment variables");
+    }
+    const base = new Airtable({ apiKey: process.env.AIRTABLE_PERSONAL_ACCESS_TOKEN }).base(process.env.AIRTABLE_BASE_ID);
+    const table = base(process.env.AIRTABLE_TABLE_NAME);
+
+    try {
+        const record = await new Promise((resolve, reject) => {
+            table.update(recordId, updates, { typecast: true }, function(err, rec) {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                resolve(rec);
+            });
+        });
+        console.log(`[Airtable] Successfully updated record ${recordId}`);
+        return record;
+    } catch (err) {
+        console.error(`[Airtable] Failed to update record ${recordId}:`, err.message);
+        return null;
+    }
+}
+
+async function isLeadAlreadySaved(website) {
+    if (!website) return false;
+    if (!process.env.AIRTABLE_PERSONAL_ACCESS_TOKEN || !process.env.AIRTABLE_BASE_ID || !process.env.AIRTABLE_TABLE_NAME) return false;
+
+    let domain;
+    try {
+        let url = website;
+        if (!url.startsWith('http')) url = 'https://' + url;
+        domain = new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+    } catch (e) {
+        return false;
+    }
+
+    const base = new Airtable({ apiKey: process.env.AIRTABLE_PERSONAL_ACCESS_TOKEN }).base(process.env.AIRTABLE_BASE_ID);
+    const table = base(process.env.AIRTABLE_TABLE_NAME);
+
+    const safeDomain = domain.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    return new Promise((resolve) => {
+        table.select({
+            filterByFormula: `FIND("${safeDomain}", LOWER({website})) > 0`,
+            maxRecords: 1,
+            fields: ['website']
+        }).firstPage((err, records) => {
+            if (err) { resolve(false); return; }
+            resolve(records && records.length > 0);
+        });
+    });
+}
+
+module.exports = { saveLeadsToAirtable, updateLeadStatus, isLeadAlreadySaved };
 
 // Self-test execution if run directly
 if (require.main === module) {

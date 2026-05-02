@@ -115,253 +115,6 @@ Federal University Oye-Ekiti, Nigeria | 2018 – 2023
 
 ---
 
-# SECTION 2: PROFESSIONAL TRAINING & SYLLABUS (Complete Learning History)
-
-This section documents the comprehensive training curriculum that built Gideon's technical foundation. Each course includes detailed timestamps and module breakdowns.
-
-## Zapier Training
-
-### Core Curriculum
-- Workflows
-- Triggers & Actions
-- Filter logic
-- Canvas
-- Chatbots
-- Logic blocks
-- If/else behavior
-- Mapping
-- Event types
-- Content generation
-- Trigger events
-- "Continue Only If" logic
-- AI instructions
-- AI logic types
-
-## Make.com Mastery
-
-### Complete Course Structure (TIMESTAMPS)
-- **0:00** — Intro
-- **6:56** — Make.com Pricing
-- **7:54** — Create a Make.com account
-- **8:40** — Make.com user interface
-- **15:50** — Building our first Make.com scenario
-- **16:25** — Adding your first Make.com module
-- **17:00** — Triggers and actions
-- **19:26** — Connect an app into Make.com
-- **24:15** — Responses in Make.com
-- **29:35** — Mapping in Make.com
-- **34:00** — Routing
-- **41:26** — Filtering
-- **45:25** — Functions
-- **53:04** — Text parsing
-- **56:48** — Regex (regular expressions)
-- **1:01:50** — AI
-- **1:20:04** — Scheduling
-- **1:20:40** — JSON, data and structures
-- **1:26:53** — Iterators
-- **1:30:50** — Aggregators
-- **1:35:56** — Error handling
-- **1:42:32** — Webhooks
-- **1:49:49** — HTTP requests
-- **2:03:12** — Conclusion
-
-### Make.com AI Agent Course (TIMESTAMPS)
-- **0:00** — Intro
-- **4:07** — Getting started
-- **5:56** — AI agent
-- **10:30** — Telegram trigger module
-- **14:00** — Send Telegram messages
-- **18:00** — Creating sub agents in Make.com
-- **29:40** — Conclusion
-
-## n8n Mastery
-
-### Foundational Course (TIMESTAMPS)
-- **0:00** — Intro
-- **7:58** — What is n8n?
-- **8:43** — n8n pricing
-- **9:46** — Sign up for n8n
-- **11:15** — n8n UI
-- **15:36** — Create a trigger
-- **24:36** — Create an action
-- **28:20** — Mapping variables in n8n
-- **33:31** — Functions in n8n
-- **40:51** — Filters in n8n
-- **43:55** — Switch in n8n
-- **49:23** — Merge in n8n
-- **52:42** — Create your first AI agent
-- **1:18:45** — Create third reporting workflow
-- **1:22:03** — Data types in n8n
-- **1:28:18** — Iterators on arrays
-- **1:29:25** — Array aggregator
-- **1:34:18** — Code in n8n
-- **1:43:19** — Webhooks in n8n
-- **1:46:22** — HTTP requests in n8n
-- **1:52:04** — Building a RAG AI agent
-- **1:52:36** — Google Drive integration
-- **1:57:35** — Adding PDF documents into RAG system
-- **1:59:30** — Adding data into vector store
-- **2:05:11** — Retrieving data from RAG chatbot
-
-### n8n AI Agent Deep Dive (Complete Chapter Breakdown)
-- **0:00** — Overview
-- **1:26** — AI Foundations
-- **2:58** — Course Intro
-- **4:21** — What are AI Agents?
-- **6:51** — Agents vs. Automations
-- **10:31** — Data Flow
-- **13:21** — Who are Agents for?
-- **15:18** — Tool Stack
-- **17:09** — Intro to N8N
-- **19:41** — N8N Pricing
-- **21:41** — Sign-up
-- **23:07** — N8N Dashboard
-- **28:07** — N8N Canvas
-- **28:51** — Start a Workflow
-- **30:51** — What are nodes?
-- **34:18** — Trigger, Action, Utility Nodes
-- **39:41** — Code & Agent Nodes
-- **41:11** — Building an Automation
-- **42:16** — Automation Building Tips
-- **45:21** — Build 1: Lead Form Automation
-- **47:21** — Build 1 Begins
-- **48:36** — Create a Form
-- **54:11** — Lead Form Execution
-- **55:31** — Switch Node
-- **57:23** — Input, Configure & Output
-- **59:41** — Switch Node Settings
-- **1:04:58** — Testing Switch Node
-- **1:07:21** — Gmail Action
-- **1:08:35** — Credentials Overview
-- **1:10:51** — Gmail Node Settings
-- **1:13:21** — Expression Field
-- **1:16:01** — Lead Form Test
-- **1:17:31** — Adding Labels
-- **1:22:46** — Testing all Budgets
-- **1:25:38** — Build 2: Weather Automation
-- **1:30:11** — Airtable Set-up
-- **1:34:21** — Build 2 Form
-- **1:36:04** — Switch Node Routing
-- **1:38:34** — Weather Data
-- **1:39:41** — HTTP Get Request
-- **1:44:46** — Latitude & Longitude
-- **1:49:12** — Mapping HTTP Request
-- **1:51:11** — Coordinate Error Fix
-- **1:53:53** — Code Node
-- **1:55:20** — Generating JS Code
-- **1:57:41** — Testing Code
-- **1:59:03** — Map Data to Airtable
-- **2:02:29** — Airtable Node Settings
-- **2:04:34** — Final Tests
-- **2:06:46** — Building an Agent
-- **2:08:46** — How Agents Work
-- **2:11:09** — Agentic Workflow
-- **2:14:51** — Additional Examples
-- **2:17:21** — Build 3: Email Agent
-- **2:19:24** — Build 3 Begins
-- **2:21:26** — Gmail Trigger
-- **2:22:31** — Trigger Test
-- **2:25:58** — Get Message Action
-- **2:27:26** — AI Agent Node
-- **2:29:15** — OpenAI Credentials
-- **2:32:39** — Tools for Agents
-- **2:34:24** — Calendar Access
-- **2:38:31** — Goals Workspace
-- **2:42:05** — Airtable Token
-- **2:43:09** — Search Tool
-- **2:44:59** — Chat Trigger
-- **2:46:37** — Alternative Search Tool
-- **2:47:11** — Instruction Basics
-- **2:49:35** — Expression Prompt
-- **2:52:33** — Input/Output Examples
-- **2:55:25** — Debugging Expression
-- **2:58:48** — Response Example
-- **3:00:48** — Email Labels
-- **3:05:30** — Output Extraction
-- **3:09:03** — Output Parser
-- **3:10:26** — JSON Basics
-- **3:15:11** — Applying JSON
-- **3:18:03** — Model Change for Agents
-- **3:19:51** — Draft Action
-- **3:22:32** — Agent Test
-- **3:23:51** — Add Label to Thread
-- **3:26:08** — B3 Switch Node
-- **3:28:10** — Dynamic Mapping
-- **3:30:41** — Final Route Testing
-- **3:36:24** — Build 4: Communication Mediums
-- **3:38:06** — Interfaces for Communication
-- **3:39:20** — Connect to Telegram
-- **3:41:30** — BotFather
-- **3:42:06** — Telegram Node
-- **3:46:07** — Chat Data
-- **3:48:36** — If Node Explained
-- **3:52:35** — Transcribe Node
-- **3:54:10** — Agent Node
-- **3:55:59** — Edit Fields
-- **3:58:04** — Chat Model
-- **3:58:51** — Chat ID
-- **4:01:09** — Edit Fields (Simplified)
-- **4:03:46** — Telegram Test
-- **4:04:36** — Adding Memory
-- **4:08:21** — What is Vibe Coding?
-- **4:09:37** — Vibe Coding Course
-- **4:10:23** — Webhook Node
-- **4:12:03** — Lovable Interface
-- **4:13:56** — Respond to Webhook
-- **4:15:21** — Edit Fields Duplicate
-- **4:16:05** — If Node Addition
-- **4:17:12** — Message Test
-- **4:18:38** — Multi-Agent Hierarchy
-- **4:22:09** — Classifier Agents
-- **4:24:57** — Call N8N Workflow Tool
-- **4:26:56** — Multi-Agent Uses
-- **4:31:21** — Build 5: Personal Assistant
-- **4:34:09** — Build 5 Begins
-- **4:35:03** — Chat Trigger & Agent
-- **4:36:57** — Instructions
-- **4:39:16** — Google Calendar
-- **4:40:56** — Agent Node Instructions
-- **4:43:30** — Classifier Tool
-- **4:44:56** — Classifier Test
-- **4:46:22** — User Query
-- **4:47:57** — Adding Calendar Tools
-- **4:53:29** — Create Test
-- **4:56:08** — Search Test
-- **4:58:26** — Delete, Get, Update Events
-- **5:00:49** — Final Tests
-- **5:02:31** — (!) Try it Yourself
-- **5:04:50** — Conclusion
-- **5:05:46** — Join AI Foundations
-
-## Antigravity 2 Hour Masterclass: Build & Sell AI Agents & Apps (No Code)
-
-### Course Breakdown (TIMESTAMPS)
-- **0:00** — Intro
-- **0:18** — Overview
-- **0:46** — Sample Use Cases
-- **4:18** — Why Learn Antigravity
-- **6:43** — Agentic Workflows
-- **10:25** — Live Builds
-- **2:34:09** — Conclusion
-
-## Claude Code Full 4 Hour Course: Build & Sell Apps & Agents
-
-### Complete Course Structure (TIMESTAMPS)
-- **0:00** — Intro
-- **0:05** — Overview
-- **0:49** — Live Builds/Use Cases
-- **5:52** — Project #1: Developing a SaaS Application
-- **38:46** — Website Build
-- **56:00** — MCP
-- **1:11:10** — Web App Setup
-- **1:47:51** — Launching Web App
-- **52:58** — Conclusion
-- **2:05:14** — Project #2: Bookkeeping
-- **2:43:50** — Project #3: Web App + Agentic Workflows
-- **4:24:21** — Conclusion
-
----
-
 # SECTION 3: n8n PORTFOLIO (7 Detailed Projects)
 
 ## Project 1: Full Autonomous AI Outreach System
@@ -836,6 +589,41 @@ Reference:
 - Claude Code and AI-assisted development workflows
 - RAG systems and vector databases
 - Multi-agent orchestration
+
+### For Insurance Brokers & Brokerages
+Reference:
+- Lead routing & CRM system (90% reduction in qualification time)
+- AI Personal Assistant with RAG Memory — scheduling, task tracking
+- Contract generation automation (2 hours → 5 minutes)
+- Pitch angle: automating quote follow-ups, client intake, renewal reminders, and document workflows so brokers focus on selling, not chasing paperwork
+
+### For Law Firms
+Reference:
+- Contract generation automation (2 hours → 5 minutes)
+- Company Documentation RAG System ("Always-On" Expert Agent)
+- AI RevOps Engine with health scoring and escalation alerts
+- Pitch angle: automating client intake, document generation, deadline tracking, and internal knowledge retrieval so lawyers focus on casework, not admin
+
+### For Real Estate Agencies
+Reference:
+- Intelligent Lead Routing & CRM System
+- AI Personal Assistant with RAG Memory
+- Hybrid AI Support Agent (Telegram & Human Handoff)
+- Pitch angle: automating lead qualification, property inquiry follow-ups, viewing scheduling, and CRM updates so agents focus on closing, not chasing
+
+### For Property Management Companies
+Reference:
+- Lead routing & CRM system
+- Automated notification systems (200+ clients, zero missed deadlines)
+- AI Support Agent with human handoff
+- Pitch angle: automating tenant onboarding, maintenance request routing, rent reminder sequences, and inspection scheduling
+
+### For Recruitment Agencies
+Reference:
+- Lead routing & CRM system (100+ leads per week)
+- AI Personal Assistant with RAG Memory
+- SamJaden experience: 500+ student enrolments monthly at 99% accuracy
+- Pitch angle: automating candidate intake, CV parsing, interview scheduling, and client follow-up so recruiters focus on placements
 
 ### For Any Company with Manual Workflows
 Reference:

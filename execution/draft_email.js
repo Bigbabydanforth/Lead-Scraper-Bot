@@ -7,10 +7,6 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 async function draftEmail(lead) {
     try {
-        // Read governance files first (system architecture rule)
-        fs.readFileSync(path.join(__dirname, '../Instructions.md'), 'utf8');
-        fs.readFileSync(path.join(__dirname, '../project_specs.md'), 'utf8');
-
         const oppsArray = Array.isArray(lead.automation_opportunities)
             ? lead.automation_opportunities
             : (lead.automation_opportunities || '').split('\n').filter(Boolean);
@@ -19,7 +15,13 @@ async function draftEmail(lead) {
             return null;
         }
 
-        const gideonProfile = fs.readFileSync(path.join(__dirname, '../assets/gideon_profile.md'), 'utf8');
+        let gideonProfile;
+        try {
+            gideonProfile = fs.readFileSync(path.join(__dirname, '../assets/gideon_profile.md'), 'utf8');
+        } catch (fileErr) {
+            console.error(`[draft_email] FATAL: Cannot read gideon_profile.md — ${fileErr.message}`);
+            return null;
+        }
 
         const dmName = lead.decision_maker_name || "not found";
         const dmTitle = lead.decision_maker_title || "not found";
@@ -27,7 +29,7 @@ async function draftEmail(lead) {
             ? lead.automation_opportunities.join(", ")
             : lead.automation_opportunities;
 
-        const prompt = `You are writing cold outreach emails on behalf of Gideon Awotuyi, an AI Automation Engineer looking for his first client.
+        const prompt = `You are writing cold outreach emails on behalf of Gideon Awotuyi, a freelance AI Automation Engineer building his client base.
 
 STEP 1 - READ THE COMPANY DETAILS:
 Company Name: ${lead.name}
@@ -39,77 +41,70 @@ Automation Opportunities: ${opsJoined}
 Decision Maker Name: ${dmName}
 Decision Maker Title: ${dmTitle}
 
-STEP 2 - READ GIDEON'S PROFILE AND PICK THE MOST RELEVANT PROJECT:
+STEP 2 - READ GIDEON'S PROFILE FOR CONTEXT:
 ${gideonProfile}
 
-STEP 3 - WRITE TWO EMAILS FOLLOWING THIS EXACT FORMAT:
+STEP 3 - WRITE TWO EMAILS USING THE WINNING FORMAT BELOW.
 
-EMAIL 1 is sent to the company inbox. It must:
-- Open with: "Hi ${lead.name} team,"
-- Sentence 1: mention the company name, city, and what they do in one line
-- Sentences 2-3: name ONE specific automation opportunity from the list and explain the problem it solves in plain human language (no jargon)
-- Sentences 4-5: mention ONE project Gideon actually built that is similar, and include a real measurable result (e.g. "cut manual workload by 40%")
-- Final paragraph: invite a low-pressure conversation and include Gideon's LinkedIn and portfolio link from his profile
-- Second-to-last line must be exactly: "If you'd rather not hear from me, just reply with 'unsubscribe'."
-- Sign off with: "Best," or "Talk soon,"
-- Tone: warm, direct, peer-to-peer. NOT salesy. NOT corporate.
-- Length: 150-180 words maximum
+THE WINNING EMAIL STRUCTURE (this exact format got a real CEO to reply and book a meeting the same day):
 
-EMAIL 2 is sent directly to the decision maker:
-${dmName !== "not found" ? `- Open with: "Hi ${dmName.split(' ')[0]},"
-- Acknowledge their role (${dmTitle}) and the company
-- Reframe the SAME automation opportunity as a PERSONAL problem they face as a leader, not a company problem
-- Reference ONE different project or result from Gideon's profile (NOT the same one used in Email 1)
-- Same tone: direct, peer-to-peer, not salesy
-- Second-to-last line must be exactly: "If you'd rather not hear from me, just reply with 'unsubscribe'."
-- Sign off with: "Best," or "Talk soon,"
-- Length: 150-180 words maximum` : `- SKIP this email. Set email2_subject to null and email2_body to null.`}
+Paragraph 1 - PAIN FIRST: Open by naming a specific, real operational pain this type of person faces in their role. Make it feel like you read their mind. No compliments. No "I came across you." Just the pain, stated plainly.
 
-ABSOLUTE RULES - NEVER BREAK THESE:
-1. Plain text only. Zero HTML, zero bullet points, zero markdown, zero bold.
-2. Never write "I hope this email finds you well" or any variation.
-3. Never use: synergy, leverage (as verb), touch base, circle back, bandwidth, scalable solution, game-changer, revolutionize.
-4. Never mention AI wrote this email.
-5. Never reference course names, video timestamps, or training modules. Only reference real projects Gideon built.
-6. Subject lines must NOT contain: free, guaranteed, opportunity, make money, click here, limited time, exclusive, urgent, act now.
-7. Subject lines and bodies must use plain ASCII only. No em dashes (use -), no smart quotes (use '), no ellipsis character (use ...).
-8. Email 1 and Email 2 must be completely different - different opening, different project reference, different angle.
-9. Maximum 180 words per email body.
+Paragraph 2 - WHO I AM: "My name is Gideon. I'm a freelance AI Automation Engineer and I work with [describe their type of company or role] to remove exactly that kind of friction."
 
-HERE IS A CONCRETE EXAMPLE OF WHAT A GOOD EMAIL PAIR LOOKS LIKE:
+Paragraph 3 - THE PROPOSAL: Start with "For [Company Name], I'd build [very specific thing]." Then write 2-3 short punchy sentences. Each sentence = one concrete outcome. Write outcomes, not features. Make the reader picture their life after the thing is built.
 
-Example Email 1 subject: Automating client onboarding for Acme Staffing - quick idea
+Paragraph 4 - REASSURANCE: "It connects directly to whatever tools your team already uses, so nothing changes about how you work - it just removes the manual steps that slow things down."
 
-Example Email 1 body:
-Hi Acme Staffing team,
-
-I came across your agency in Austin - you're doing solid work connecting companies with great talent, and from what I can tell, your client onboarding process probably involves a lot of manual back-and-forth.
-
-I recently built an automated onboarding workflow for a similar agency using n8n and Claude API that cut their admin team's workload by 40%. Every new client now gets a tailored intake form, automatic follow-up emails, and real-time status updates without anyone on the team touching it manually.
-
-I think something like this could save your team real hours every week. Happy to walk you through it in 20 minutes if you're curious.
-
-Portfolio: gideon.dev | LinkedIn: linkedin.com/in/gideonawotuyi
-
-If you'd rather not hear from me, just reply with 'unsubscribe'.
-
-Best,
-Gideon
+Closing: One soft CTA line. Then LinkedIn and portfolio on one line. Then the unsubscribe line. Then sign-off.
 
 ---
 
-Example Email 2 subject: A thought on your team's onboarding workload
+EMAIL 1 goes to the company general inbox:
+- Salutation: "Hi ${lead.name} team,"
+- Use the winning structure above, addressed to the whole team
+- Pick ONE automation opportunity from the list that has the most visible day-to-day impact on the team
+- Tone: warm, direct, peer-to-peer. Sounds like a real person. NOT a pitch. NOT corporate.
+- Length: 130-160 words. Every word must earn its place.
 
-Example Email 2 body:
-Hi Sarah,
+EMAIL 2 goes directly to the decision maker (${dmName !== "not found" ? dmName : "N/A"}):
+${dmName !== "not found" ? `- Salutation: "Hi ${dmName.split(' ')[0]},"
+- Use the winning structure above, but frame it as THEIR personal leadership pain, not a company problem
+- Pick a DIFFERENT automation opportunity from the list than Email 1
+- Reference a different project or result from Gideon's profile than Email 1
+- Tone: peer-to-peer. One professional talking to another.
+- Length: 130-160 words. Tighter and more personal than Email 1.` : `- SKIP. Set email2_subject to null and email2_body to null.`}
 
-As Head of Operations at Acme Staffing, you're probably the one who feels it most when client onboarding goes sideways - missed follow-ups, documents stuck in email threads, the team asking "where are we with this client?"
+ABSOLUTE RULES - NEVER BREAK THESE:
+1. Plain text only. Zero HTML, zero bullet points, zero markdown, zero bold.
+2. Never write "I hope this email finds you well" or any variation of it.
+3. Never use: synergy, leverage (as verb), touch base, circle back, bandwidth, scalable solution, game-changer.
+4. Never mention AI wrote this email.
+5. Never reference course names, video timestamps, or training modules from the profile. Real projects only.
+6. Subject lines must NOT contain: free, guaranteed, opportunity, make money, click here, limited time, exclusive, urgent, act now.
+7. Subject lines and bodies: plain ASCII only. No em dashes (use -), no smart quotes (use '), no ellipsis character (use ...).
+8. The second-to-last line before the sign-off must be exactly: "If you'd rather not hear from me, just reply with 'unsubscribe'."
+9. Sign off with "Best," or "Talk soon," then "Gideon" on the next line.
+10. Email 1 and Email 2 must use different opportunities, different angles, different project references.
+11. Maximum 160 words per email body.
 
-I built an end-to-end intake automation for a hiring firm last year. Their new clients go from first contact to fully onboarded with zero manual steps on the team's side. The operations lead told me it freed up 15 hours a week for her team.
+HERE IS THE ACTUAL WINNING EMAIL THAT GOT A REAL CEO TO REPLY AND BOOK A MEETING. MATCH THIS STRUCTURE AND VOICE EXACTLY:
 
-I'm not pitching a product. Just offering a practical conversation about whether something similar would help your team at Acme.
+Subject: Quick idea for Starfish
 
-Portfolio: gideon.dev | LinkedIn: linkedin.com/in/gideonawotuyi
+Hi David,
+
+As CEO of a full-service branding agency in New York, you're probably very aware of how much time gets lost before a project even kicks off - collecting briefs, following up on intake details, manually getting information into the right places.
+
+My name is Gideon. I'm a freelance AI Automation Engineer and I work with agency founders to remove exactly that kind of friction.
+
+For Starfish, I'd build a Claude API-powered chatbot for your website that qualifies incoming leads and gathers brand discovery information before you ever get on a call. Your team shows up prepared. Prospects feel heard. And the back-and-forth before kickoff drops significantly.
+
+It connects directly to whatever tools your team already uses, so nothing changes about how you work - it just removes the manual steps that slow things down.
+
+Worth a 20-minute call to see if it fits?
+
+LinkedIn: linkedin.com/in/gideon-awotuyi-84518b310 | Portfolio: bit.ly/Gideon-Awotuyi
 
 If you'd rather not hear from me, just reply with 'unsubscribe'.
 
@@ -118,7 +113,7 @@ Gideon
 
 ---
 
-Now write the actual emails for ${lead.name} following this exact pattern. Replace the example links with the actual LinkedIn and portfolio links from Gideon's profile.
+Now write the actual emails for ${lead.name} using this exact structure and voice. Use the real LinkedIn and portfolio links from Gideon's profile.
 
 Respond with ONLY a valid JSON object. No explanation. No markdown. No preamble.
 {

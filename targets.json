@@ -123,12 +123,14 @@
     "healthcare clinics",
     "travel companies",
     "travel agencies",
-    "logistics companies"
+    "logistics companies",
+    "insurance brokers",
+    "property management companies"
   ],
   "leads_per_run": 15,
   "scrape_buffer": 40,
   "rotation": "sequential",
   "current_country_index": 0,
   "current_city_index": 0,
-  "current_service_index": 7
+  "current_service_index": 2
 }

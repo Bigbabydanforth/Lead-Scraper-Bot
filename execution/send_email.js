@@ -10,10 +10,10 @@ const MAX_EMAILS_PER_DAY = 30;
 function getDailyCount() {
     const today = new Date().toISOString().split('T')[0];
     if (fs.existsSync(LIMIT_FILE)) {
-        const data = JSON.parse(fs.readFileSync(LIMIT_FILE, 'utf8'));
-        if (data.date === today) {
-            return data;
-        }
+        try {
+            const data = JSON.parse(fs.readFileSync(LIMIT_FILE, 'utf8'));
+            if (data.date === today) return data;
+        } catch (_) {}
     }
     return { date: today, count: 0 };
 }
@@ -125,8 +125,8 @@ async function sendEmails(lead, airtableRecordId) {
                 // If this is already a retry run (email1_sent from a previous day), mark failed to stop retrying.
                 finalStatus = email1SentThisRun ? "email1_sent" : "failed";
             }
-        } else if (!anyFailed) {
-            // No email2 to send — fully done.
+        } else if (!anyFailed && sentCount > 0) {
+            // No email2 to send — at least one email went out, so we're fully done.
             finalStatus = "sent";
         }
 

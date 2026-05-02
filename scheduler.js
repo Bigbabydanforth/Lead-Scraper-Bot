@@ -38,7 +38,7 @@ async function runDailyPipeline(overrideService, overrideCity, overrideCount) {
         const queuedRecords = await new Promise((resolve, reject) => {
             table.select({
                 filterByFormula: "OR({email_status} = 'queued', {email_status} = 'email1_sent')",
-                maxRecords: 15
+                maxRecords: 50
             }).firstPage((err, records) => {
                 if (err) return reject(err);
                 resolve(records);
@@ -89,7 +89,11 @@ async function runDailyPipeline(overrideService, overrideCity, overrideCount) {
         const countryIndex = (targets.current_country_index || 0) % allCountries.length;
         const sIndex = (targets.current_service_index || 0) % targets.service_categories.length;
         const country = allCountries[countryIndex];
-        const citiesList = targets.cities[country] || ["Unknown"];
+        const citiesList = targets.cities[country];
+        if (!citiesList || citiesList.length === 0) {
+            console.error(`[scheduler] No cities configured for country "${country}" — skipping this run`);
+            return;
+        }
         const cIndex = (targets.current_city_index || 0) % citiesList.length;
         
         city = citiesList[cIndex];
@@ -99,20 +103,22 @@ async function runDailyPipeline(overrideService, overrideCity, overrideCount) {
 
         console.log(`[scheduler] Today's target: ${service} in ${city}, ${country}`);
 
-        // Update targets.json for next run (Option 3: Country Sweeper)
-        // 1. Advance the service index globally every day
-        targets.current_service_index = (sIndex + 1) % targets.service_categories.length;
-        
-        // 2. Advance the city index every day
-        const nextCIndex = cIndex + 1;
-        if (nextCIndex >= citiesList.length) {
-            // Exhausted all cities in this country -> Move to next country
-            targets.current_city_index = 0;
-            targets.current_country_index = (countryIndex + 1) % allCountries.length;
-        } else {
-            // Move to next city in the same country
-            targets.current_city_index = nextCIndex;
-            targets.current_country_index = countryIndex;
+        // Country-first saturation: run all 12 niches in one city before moving to the next.
+        // Service index advances every day. City only advances when all niches are done.
+        const nextSIndex = (sIndex + 1) % targets.service_categories.length;
+        targets.current_service_index = nextSIndex;
+
+        if (nextSIndex === 0) {
+            // Completed all niches for this city — move to the next city
+            const nextCIndex = cIndex + 1;
+            if (nextCIndex >= citiesList.length) {
+                // Exhausted all cities in this country — move to next country
+                targets.current_city_index = 0;
+                targets.current_country_index = (countryIndex + 1) % allCountries.length;
+            } else {
+                targets.current_city_index = nextCIndex;
+                targets.current_country_index = countryIndex;
+            }
         }
 
         fs.writeFileSync(TARGETS_FILE, JSON.stringify(targets, null, 2));
@@ -131,10 +137,16 @@ async function runDailyPipeline(overrideService, overrideCity, overrideCount) {
     const freshLeads = [];
     const seenDomains = new Set();
     for (const lead of rawLeads) {
-        let domain = lead.website || '';
+        let domain = '';
         try {
-            domain = new URL(domain.startsWith('http') ? domain : 'https://' + domain).hostname.replace(/^www\./, '').toLowerCase();
+            const raw = lead.website || '';
+            const url = raw.startsWith('http') ? raw : 'https://' + raw;
+            domain = new URL(url).hostname.replace(/^www\./, '').toLowerCase();
         } catch (e) {}
+        if (!domain) {
+            console.log(`[scheduler] Dedup: skipping ${lead.name} — cannot parse website URL`);
+            continue;
+        }
         if (seenDomains.has(domain)) {
             console.log(`[scheduler] Dedup: skipping ${lead.name} — duplicate domain in this run`);
             continue;

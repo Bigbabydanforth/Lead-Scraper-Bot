@@ -11,38 +11,55 @@ const PROVIDER_STATUS_FILE = path.join(__dirname, '../.tmp/provider_status.json'
 
 function getProviderStatus() {
     const today = new Date().toISOString().split('T')[0];
-    if (fs.existsSync(PROVIDER_STATUS_FILE)) {
-        try {
-            const data = JSON.parse(fs.readFileSync(PROVIDER_STATUS_FILE, 'utf8'));
-            if (data.date === today) return data;
-        } catch (e) {}
+    const thisMonth = today.substring(0, 7);
+    const fresh = { date: today, month: thisMonth, hunter: false, snov: false, tomba: false, icypeas: false, getprospect: false, prospeo: false };
+
+    if (!fs.existsSync(PROVIDER_STATUS_FILE)) return fresh;
+    let saved;
+    try { saved = JSON.parse(fs.readFileSync(PROVIDER_STATUS_FILE, 'utf8')); } catch (e) { return fresh; }
+
+    // New billing month — full reset
+    if (saved.month !== thisMonth) return fresh;
+
+    // Same month, new day — reset daily-only flags, keep monthly ones
+    if (saved.date !== today) {
+        const refreshed = { ...saved, date: today };
+        for (const key of ['hunter', 'snov', 'tomba', 'icypeas', 'getprospect', 'prospeo']) {
+            if (refreshed[key] === 'daily') refreshed[key] = false;
+        }
+        return refreshed;
     }
-    return { date: today, hunter: false, snov: false, tomba: false, getprospect: false, prospeo: false };
+
+    return saved;
 }
 
 function getCurrentMode() {
     const status = getProviderStatus();
-    const domainExhausted = status.hunter && status.snov && status.tomba;
+    const domainExhausted = status.hunter && status.snov && status.tomba && status.icypeas;
     const nameExhausted = status.getprospect && status.prospeo;
     if (!domainExhausted) return 'full';
     if (!nameExhausted) return 'name_only';
     return 'company_only';
 }
 
-function markExhausted(provider) {
+// type: 'monthly' = billing credits gone (don't retry until next month)
+//       'daily'   = rate limited today only (retry tomorrow)
+function markExhausted(provider, type = 'daily') {
     const status = getProviderStatus();
-    if (status[provider]) return; // already marked
-    status[provider] = true;
+    if (status[provider] === 'monthly') return; // already permanently flagged this month
+    if (status[provider] === type) return; // already flagged same type
+    status[provider] = type;
     const tmpDir = path.dirname(PROVIDER_STATUS_FILE);
     if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
     fs.writeFileSync(PROVIDER_STATUS_FILE, JSON.stringify(status, null, 2));
-    console.log(`[enrich] ${provider} exhausted for today — skipping for remaining leads`);
+    const label = type === 'monthly' ? 'for this billing period' : 'for today';
+    console.log(`[enrich] ${provider} exhausted ${label} — skipping remaining leads`);
 }
 
 // ─── PROVIDER 1: HUNTER.IO ──────────────────────────────────────────────────
 async function tryHunter(domain) {
     if (!process.env.HUNTER_API_KEY) return null;
-    if (getProviderStatus().hunter) { console.log(`[enrich] Hunter.io — skipping (exhausted today)`); return null; }
+    if (getProviderStatus().hunter) { console.log(`[enrich] Hunter.io — skipping (exhausted)`); return null; }
     try {
         const res = await axios.get(
             `https://api.hunter.io/v2/domain-search?domain=${domain}&api_key=${process.env.HUNTER_API_KEY}`
@@ -62,17 +79,55 @@ async function tryHunter(domain) {
             }
         }
     } catch (e) {
-        if (e.response?.status === 429 || e.response?.status === 402) markExhausted('hunter');
+        if (e.response?.status === 402) markExhausted('hunter', 'monthly');
+        else if (e.response?.status === 429) markExhausted('hunter', 'daily');
         else console.log(`[enrich] Hunter.io failed: ${e.message}`);
     }
     return null;
 }
 
-// ─── PROVIDER 4: GETPROSPECT ─────────────────────────────────────────────────
+// ─── PROVIDER 4: ICYPEAS (name lookup via LinkedIn data) ─────────────────────
+// Does NOT return an email. Returns { name, title } of the decision maker found
+// on LinkedIn for this domain. Used to feed GetProspect and Prospeo when website
+// scraping found no name.
+async function tryIcypeasNameLookup(domain) {
+    if (!process.env.ICYPEAS_API_KEY) return null;
+    if (getProviderStatus().icypeas) { console.log(`[enrich] Icypeas — skipping (exhausted)`); return null; }
+    try {
+        const res = await axios.post(
+            'https://app.icypeas.com/api/find-people',
+            {
+                query: {
+                    currentJobTitle: { include: ['CEO', 'Founder', 'Co-Founder', 'Co Founder', 'Head of Operations', 'Managing Director', 'President', 'Hiring Manager'] },
+                    currentCompanyWebsite: { include: [domain] }
+                },
+                pagination: { size: 1 }
+            },
+            { headers: { 'Authorization': process.env.ICYPEAS_API_KEY, 'Content-Type': 'application/json' } }
+        );
+        const leads = res.data?.leads || [];
+        if (leads.length > 0) {
+            const person = leads[0];
+            const fullName = `${person.firstname || person.firstName || ''} ${person.lastname || person.lastName || ''}`.trim();
+            const jobTitle = person.currentJobTitle || person.jobTitle || '';
+            if (fullName) {
+                console.log(`[enrich] Icypeas → found name: ${fullName} (${jobTitle})`);
+                return { name: fullName, title: jobTitle };
+            }
+        }
+    } catch (e) {
+        if (e.response?.status === 402) markExhausted('icypeas', 'monthly');
+        else if (e.response?.status === 429) markExhausted('icypeas', 'daily');
+        else console.log(`[enrich] Icypeas name lookup failed: ${e.message}`);
+    }
+    return null;
+}
+
+// ─── PROVIDER 6: GETPROSPECT ─────────────────────────────────────────────────
 // Name-based lookup — only fires after website scraping finds a decision maker name.
 async function tryGetProspect(domain, name) {
     if (!process.env.GETPROSPECT_API_KEY || !name) return null;
-    if (getProviderStatus().getprospect) { console.log(`[enrich] GetProspect — skipping (exhausted today)`); return null; }
+    if (getProviderStatus().getprospect) { console.log(`[enrich] GetProspect — skipping (exhausted)`); return null; }
     const parts = name.trim().split(/\s+/);
     if (parts.length < 2) return null;
     try {
@@ -86,13 +141,14 @@ async function tryGetProspect(domain, name) {
         const email = res.data?.data?.email;
         const status = res.data?.data?.status;
         const creditsLeft = res.data?.metadata?.credits?.email_search;
-        if (creditsLeft === 0) markExhausted('getprospect');
+        if (creditsLeft === 0) markExhausted('getprospect', 'monthly');
         if (email && (status === 'valid' || status === 'accept_all')) {
             console.log(`[enrich] GetProspect → ${email}`);
             return { email, name, title: null };
         }
     } catch (e) {
-        if (e.response?.status === 402 || e.response?.status === 429) markExhausted('getprospect');
+        if (e.response?.status === 402) markExhausted('getprospect', 'monthly');
+        else if (e.response?.status === 429) markExhausted('getprospect', 'daily');
         else console.log(`[enrich] GetProspect failed: ${e.message}`);
     }
     return null;
@@ -101,7 +157,7 @@ async function tryGetProspect(domain, name) {
 // ─── PROVIDER 2: SNOV.IO ────────────────────────────────────────────────────
 async function trySnovio(domain) {
     if (!process.env.SNOV_CLIENT_ID || !process.env.SNOV_CLIENT_SECRET) return null;
-    if (getProviderStatus().snov) { console.log(`[enrich] Snov.io — skipping (exhausted today)`); return null; }
+    if (getProviderStatus().snov) { console.log(`[enrich] Snov.io — skipping (exhausted)`); return null; }
     try {
         // Step 1: Get access token
         const tokenRes = await axios.post(
@@ -196,7 +252,8 @@ async function trySnovio(domain) {
             }
         }
     } catch (e) {
-        if (e.response?.status === 402 || e.response?.status === 429) markExhausted('snov');
+        if (e.response?.status === 402) markExhausted('snov', 'monthly');
+        else if (e.response?.status === 429) markExhausted('snov', 'daily');
         else console.log(`[enrich] Snov.io failed: ${e.message}`);
     }
     return null;
@@ -205,7 +262,7 @@ async function trySnovio(domain) {
 // ─── PROVIDER 3: TOMBA.IO ───────────────────────────────────────────────────
 async function tryTomba(domain) {
     if (!process.env.TOMBA_API_KEY || !process.env.TOMBA_API_SECRET) return null;
-    if (getProviderStatus().tomba) { console.log(`[enrich] Tomba.io — skipping (exhausted today)`); return null; }
+    if (getProviderStatus().tomba) { console.log(`[enrich] Tomba.io — skipping (exhausted)`); return null; }
     try {
         const res = await axios.get('https://api.tomba.io/v1/domain-search', {
             params: { domain },
@@ -229,7 +286,8 @@ async function tryTomba(domain) {
             }
         }
     } catch (e) {
-        if (e.response?.status === 402 || e.response?.status === 429) markExhausted('tomba');
+        if (e.response?.status === 402) markExhausted('tomba', 'monthly');
+        else if (e.response?.status === 429) markExhausted('tomba', 'daily');
         else console.log(`[enrich] Tomba.io failed: ${e.message}`);
     }
     return null;
@@ -240,7 +298,7 @@ async function tryTomba(domain) {
 // Now uses /enrich-person which requires a name — called only after scraping finds a name.
 async function tryProspeo(domain, name) {
     if (!process.env.PROSPEO_API_KEY || !name) return null;
-    if (getProviderStatus().prospeo) { console.log(`[enrich] Prospeo — skipping (exhausted today)`); return null; }
+    if (getProviderStatus().prospeo) { console.log(`[enrich] Prospeo — skipping (exhausted)`); return null; }
     const parts = name.trim().split(/\s+/);
     if (parts.length < 2) return null;
     try {
@@ -266,21 +324,48 @@ async function tryProspeo(domain, name) {
             return { email, name, title: null };
         }
     } catch (e) {
-        if (e.response?.status === 402 || e.response?.status === 429) markExhausted('prospeo');
+        if (e.response?.status === 402) markExhausted('prospeo', 'monthly');
+        else if (e.response?.status === 429) markExhausted('prospeo', 'daily');
         else console.log(`[enrich] Prospeo failed: ${e.message}`);
     }
     return null;
 }
 
-
 // ─── CASCADE ORCHESTRATOR ────────────────────────────────────────────────────
-async function findDecisionMakerEmail(domain, name, title) {
-    return await tryHunter(domain) ||
-           await trySnovio(domain) ||
-           await tryTomba(domain) ||
-           await tryGetProspect(domain, name) ||
-           await tryProspeo(domain, name) ||
-           null;
+// Domain providers run one-at-a-time: exhaust Hunter across ALL leads before
+// touching Snov, exhaust Snov before touching Tomba. No credit wasted trying
+// the next provider on a lead the current one simply couldn't find.
+async function findActiveDomainProvider(domain) {
+    const status = getProviderStatus();
+    if (!status.hunter) return await tryHunter(domain);
+    if (!status.snov)   return await trySnovio(domain);
+    if (!status.tomba)  return await tryTomba(domain);
+    return null;
+}
+
+// Same logic for name-based providers.
+async function findActiveNameProvider(domain, name) {
+    if (!name) return null;
+    const status = getProviderStatus();
+    if (!status.getprospect) return await tryGetProspect(domain, name);
+    if (!status.prospeo)     return await tryProspeo(domain, name);
+    return null;
+}
+
+async function findDecisionMakerEmail(domain, name) {
+    // Phase 1: Active domain provider only — if it can't find the lead, move on
+    const domainResult = await findActiveDomainProvider(domain);
+    if (domainResult) return domainResult;
+
+    // Phase 2: If website had no name, ask Icypeas to find one from LinkedIn
+    let resolvedName = name;
+    if (!resolvedName) {
+        const icypeasPerson = await tryIcypeasNameLookup(domain);
+        if (icypeasPerson) resolvedName = icypeasPerson.name;
+    }
+
+    // Phase 3: Active name-based provider only
+    return await findActiveNameProvider(domain, resolvedName) || null;
 }
 
 // ─── MAIN ENRICHMENT ────────────────────────────────────────────────────────
@@ -289,7 +374,10 @@ async function enrichLead(lead) {
     try {
         console.log(`[enrich_leads] Starting enrichment for ${lead.name}`);
 
-        browser = await puppeteer.launch({ headless: true });
+        browser = await puppeteer.launch({
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+        });
         const page = await browser.newPage();
         page.setDefaultNavigationTimeout(15000);
 
@@ -331,6 +419,13 @@ async function enrichLead(lead) {
         let baseUrl = lead.website;
         if (!baseUrl.startsWith('http')) baseUrl = 'https://' + baseUrl;
         if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
+
+        // Strip UTM params and any query strings so sub-page paths (/about, /contact etc.)
+        // are appended cleanly. Without this, a URL like ?utm_source=Google/about breaks.
+        try {
+            const parsed = new URL(baseUrl);
+            baseUrl = parsed.origin + parsed.pathname.replace(/\/$/, '');
+        } catch (e) { /* leave baseUrl as-is if parsing fails */ }
 
         let domain = new URL(baseUrl).hostname;
         if (domain.startsWith('www.')) domain = domain.substring(4);
@@ -387,7 +482,7 @@ async function enrichLead(lead) {
         }
 
         // 4. Decision Maker Email — cascade: Hunter → Snov.io → Tomba → GetProspect → Prospeo → website fallback
-        const dmResult = await findDecisionMakerEmail(domain, decision_maker_name, decision_maker_title);
+        const dmResult = await findDecisionMakerEmail(domain, decision_maker_name);
         if (dmResult) {
             decision_maker_email = dmResult.email;
             if (!decision_maker_name) decision_maker_name = dmResult.name;
