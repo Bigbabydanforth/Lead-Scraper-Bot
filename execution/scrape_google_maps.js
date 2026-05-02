@@ -10,7 +10,7 @@ async function launchBrowser() {
     });
 }
 
-const BLOCKED_TYPES = new Set(['image', 'stylesheet', 'font', 'media', 'other']);
+const BLOCKED_TYPES = new Set(['image', 'font', 'media', 'other']);
 
 async function newLeanPage(browser) {
     const page = await browser.newPage();
@@ -179,6 +179,7 @@ async function extractLeadDetails(placeUrls, service, city, count) {
                     });
                     const ratingLabel = hasNoRating ? 'No rating' : `⭐${ratingNum}`;
                     console.log(`Found qualified lead: ${details.name} ${ratingLabel} (Email: ${email || 'None, passed to enrichment'})`);
+                    if (leads.length >= count) break;
                 } else {
                     console.log(`Discarded ${details.name} (no website, or rating below 3.5)`);
                 }
