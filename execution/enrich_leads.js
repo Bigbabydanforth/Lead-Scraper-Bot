@@ -382,6 +382,7 @@ async function enrichLead(lead) {
             headless: chromium.headless,
         });
         const page = await browser.newPage();
+        page.setDefaultTimeout(15000);
         page.setDefaultNavigationTimeout(15000);
 
         let company_summary = null;

@@ -19,6 +19,7 @@ async function newLeanPage(browser) {
         if (BLOCKED_TYPES.has(req.resourceType())) req.abort();
         else req.continue();
     });
+    page.setDefaultTimeout(15000);
     page.setDefaultNavigationTimeout(15000);
     return page;
 }
