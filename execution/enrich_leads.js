@@ -294,7 +294,59 @@ async function tryTomba(domain) {
     return null;
 }
 
-// ─── PROVIDER 5: PROSPEO ─────────────────────────────────────────────────────
+// ─── PROVIDER 5: ICYPEAS EMAIL SEARCH ────────────────────────────────────────
+// Uses firstname + lastname + domain to find a personal email.
+// Async endpoint — POST starts the search, then poll until DONE.
+async function tryIcypeasEmailSearch(domain, name) {
+    if (!process.env.ICYPEAS_API_KEY || !name) return null;
+    if (getProviderStatus().icypeas) { console.log(`[enrich] Icypeas email search — skipping (exhausted)`); return null; }
+    const parts = name.trim().split(/\s+/);
+    if (parts.length < 2) return null;
+    try {
+        const startRes = await axios.post(
+            'https://app.icypeas.com/api/email-search',
+            {
+                firstname: parts[0],
+                lastname: parts.slice(1).join(' '),
+                domainOrCompany: domain
+            },
+            { headers: { 'Authorization': process.env.ICYPEAS_API_KEY, 'Content-Type': 'application/json' } }
+        );
+        const searchId = startRes.data?.item?._id;
+        if (!searchId) return null;
+
+        const TERMINAL = new Set(['FOUND', 'NOT_FOUND', 'DEBITED', 'DEBITED_NOT_FOUND', 'BAD_INPUT', 'INSUFFICIENT_FUNDS', 'ABORTED']);
+        for (let i = 0; i < 10; i++) {
+            await new Promise(r => setTimeout(r, 3000));
+            const poll = await axios.post(
+                'https://app.icypeas.com/api/bulk-single-searchs/read',
+                { id: searchId },
+                { headers: { 'Authorization': process.env.ICYPEAS_API_KEY, 'Content-Type': 'application/json' } }
+            );
+            const item = poll.data?.items?.[0];
+            if (!item) continue;
+            const status = (item.status || '').toUpperCase();
+            if (status === 'FOUND' || status === 'DEBITED') {
+                const emails = item.results?.emails || [];
+                const found = emails.find(e => e.certainty && e.certainty !== 'not_found');
+                const email = found?.email;
+                if (email) {
+                    console.log(`[enrich] Icypeas email search → ${email} (${found.certainty})`);
+                    return { email, name, title: null };
+                }
+                return null;
+            }
+            if (TERMINAL.has(status)) return null;
+        }
+    } catch (e) {
+        if (e.response?.status === 402) markExhausted('icypeas', 'monthly');
+        else if (e.response?.status === 429) markExhausted('icypeas', 'daily');
+        else console.log(`[enrich] Icypeas email search failed: ${e.message}`);
+    }
+    return null;
+}
+
+// ─── PROVIDER 6: PROSPEO ─────────────────────────────────────────────────────
 // Note: Prospeo deprecated /domain-search on March 1, 2026.
 // Now uses /enrich-person which requires a name — called only after scraping finds a name.
 async function tryProspeo(domain, name) {
@@ -350,6 +402,7 @@ async function findActiveNameProvider(domain, name) {
     const status = getProviderStatus();
     if (!status.getprospect) return await tryGetProspect(domain, name);
     if (!status.prospeo)     return await tryProspeo(domain, name);
+    if (!status.icypeas)     return await tryIcypeasEmailSearch(domain, name);
     return null;
 }
 
