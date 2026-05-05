@@ -81,54 +81,45 @@ async function runDailyPipeline(overrideService, overrideCity, overrideCount) {
             return;
         }
 
+        // Date-based deterministic rotation — immune to Heroku dyno restarts.
+        // Heroku wipes the filesystem on every restart, so file-based state is unreliable.
+        // Instead, niche and city are calculated purely from the calendar date.
+        //
+        // Anchor: 2026-05-05 = niche 11 (logistics companies), city slot 0 (New York, USA)
+        // Niche advances every day. City slot advances every 14 days (one full niche cycle).
+        const ANCHOR_DATE = '2026-05-05';
+        const ANCHOR_NICHE = 11;
+
+        const todayStr = new Date().toISOString().split('T')[0];
+        const daysSinceAnchor = Math.round(
+            (new Date(todayStr) - new Date(ANCHOR_DATE)) / 86400000
+        );
+
+        const totalNiches = targets.service_categories.length;
+        const sIndex = ((ANCHOR_NICHE + daysSinceAnchor) % totalNiches + totalNiches) % totalNiches;
+
+        // Build a flat ordered list: all cities across primary countries, then secondary
         const allCountries = [
             ...(targets.primary_countries || []),
             ...(targets.secondary_countries || [])
         ];
-
-        const countryIndex = (targets.current_country_index || 0) % allCountries.length;
-        const country = allCountries[countryIndex];
-        const citiesList = targets.cities[country];
-        if (!citiesList || citiesList.length === 0) {
-            console.error(`[scheduler] No cities configured for country "${country}" — skipping this run`);
-            return;
-        }
-        const cIndex = (targets.current_city_index || 0) % citiesList.length;
-
-        // Service advances once per calendar day — both AM and PM runs share the same niche.
-        // City stays the same all day and only moves once all 14 niches are done.
-        const today = new Date().toISOString().split('T')[0];
-        let sIndex;
-        if (targets.last_niche_date !== today) {
-            sIndex = ((targets.current_service_index || 0) + 1) % targets.service_categories.length;
-            targets.current_service_index = sIndex;
-            targets.last_niche_date = today;
-            console.log(`[scheduler] New day — advancing to niche ${sIndex}`);
-
-            // Move to next city only after all niches have been covered in this one
-            if (sIndex === 0) {
-                const nextCIndex = cIndex + 1;
-                if (nextCIndex >= citiesList.length) {
-                    targets.current_city_index = 0;
-                    targets.current_country_index = (countryIndex + 1) % allCountries.length;
-                } else {
-                    targets.current_city_index = nextCIndex;
-                    targets.current_country_index = countryIndex;
-                }
+        const allCities = [];
+        for (const c of allCountries) {
+            for (const ct of (targets.cities[c] || [])) {
+                allCities.push({ city: ct, country: c });
             }
-        } else {
-            sIndex = (targets.current_service_index || 0) % targets.service_categories.length;
-            console.log(`[scheduler] Same day — reusing niche ${sIndex}`);
         }
 
-        city = citiesList[cIndex];
+        const citySlot = Math.floor(Math.max(0, daysSinceAnchor) / totalNiches) % allCities.length;
+        const { city: computedCity, country: computedCountry } = allCities[citySlot];
+
+        city = computedCity;
+        const country = computedCountry;
         service = targets.service_categories[sIndex];
         countToScrape = targets.scrape_buffer || 20;
         dailyTarget = targets.leads_per_run || 15;
 
-        console.log(`[scheduler] Today's target: ${service} in ${city}, ${country}`);
-
-        fs.writeFileSync(TARGETS_FILE, JSON.stringify(targets, null, 2));
+        console.log(`[scheduler] Day ${daysSinceAnchor} → niche ${sIndex} (${service}) in ${city}, ${country}`);
     }
 
     // Step 3: Discover raw leads
