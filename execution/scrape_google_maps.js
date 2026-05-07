@@ -12,6 +12,20 @@ async function launchBrowser() {
 
 const BLOCKED_TYPES = new Set(['image', 'font', 'media', 'other']);
 
+// browser.close() can hang forever if Chrome froze mid-page.
+// This races it against a 10-second timeout and force-kills if needed.
+async function safeCloseBrowser(browser, label) {
+    try {
+        await Promise.race([
+            browser.close(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000))
+        ]);
+    } catch (e) {
+        console.log(`[scraper] browser.close() hung (${label}) — force killing Chrome: ${e.message}`);
+        try { browser.process()?.kill('SIGKILL'); } catch (_) {}
+    }
+}
+
 async function newLeanPage(browser) {
     const page = await browser.newPage();
     await page.setRequestInterception(true);
@@ -128,7 +142,7 @@ async function collectPlaceUrls(service, city, count) {
         console.log(`Gathered ${placeUrls.size} place URLs. Closing Maps browser...`);
         return Array.from(placeUrls);
     } finally {
-        await browser.close();
+        await safeCloseBrowser(browser, 'Phase 1');
     }
 }
 
@@ -194,7 +208,7 @@ async function extractLeadDetails(placeUrls, service, city, count) {
                 }
             }
         } finally {
-            await browser.close();
+            await safeCloseBrowser(browser, `Phase 2 batch ${Math.floor(i / BATCH_SIZE) + 1}`);
             console.log(`[scraper] Browser batch closed (${leads.length}/${count} leads so far)`);
         }
     }

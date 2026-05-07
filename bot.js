@@ -191,13 +191,27 @@ Do not include markdown blocks like \`\`\`json or any other text outside the JSO
 // Heroku provides process.env.PORT, otherwise default to 3000
 const port = process.env.PORT || 3000;
 
-// Always use long polling to prevent Telegram Webhook timeout loops on long scrapes.
-// We explicitly drop pending updates so crashes don't cause infinite retry loops!
-bot.launch({ dropPendingUpdates: true }).then(() => {
-    console.log(`Bot is running in Long Polling mode. Old pending messages dropped.`);
-}).catch(err => {
-    console.error("Failed to start bot:", err);
-});
+// Always use long polling. Retries on 409 (Telegram conflict after dyno restart/relocation)
+// because Heroku can start a new dyno before the old one releases its polling connection.
+// Each retry waits 15s — Telegram's long-poll timeout is 50s so 4 retries covers it safely.
+(async function launchBotWithRetry() {
+    for (let attempt = 1; attempt <= 5; attempt++) {
+        try {
+            await bot.launch({ dropPendingUpdates: true });
+            console.log('[bot] Running in Long Polling mode. Old pending messages dropped.');
+            return;
+        } catch (err) {
+            const is409 = err?.response?.error_code === 409;
+            if (is409 && attempt < 5) {
+                console.log(`[bot] 409 conflict — old dyno still holds connection. Retrying in 15s (attempt ${attempt}/5)...`);
+                await new Promise(r => setTimeout(r, 15000));
+            } else {
+                console.error(`[bot] Failed to start after ${attempt} attempt(s):`, err.message);
+                return;
+            }
+        }
+    }
+})();
 
 // Since Railway expects an HTTP server to bind to the PORT if a public domain is assigned,
 // we spin up a dummy server that just returns HTTP 200 OK.
