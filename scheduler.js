@@ -85,13 +85,10 @@ async function runDailyPipeline(overrideService, overrideCity, overrideCount) {
         // Heroku wipes the filesystem on every restart, so file-based state is unreliable.
         // Instead, niche and city are calculated purely from the calendar date.
         //
-        // Anchor: 2026-05-05 = niche 11 (logistics companies), city slot 0 (New York, USA)
-        // Niche advances every day. City advances when the niche cycle wraps back to 0
-        // (i.e. after a full 14-niche cycle completes), NOT after a fixed 14 calendar days.
-        // Because we anchored mid-cycle at niche 11, only 3 niches (11→12→13) remained
-        // in New York. Once the cycle wrapped to niche 0, the city moved to Austin.
-        const ANCHOR_DATE = '2026-05-05';
-        const ANCHOR_NICHE = 11;
+        // Anchor: 2026-05-11 = niche 0 (SaaS startups), city slot 1 (Austin, USA)
+        // Each city runs all 14 niches starting from niche 0. City advances every 14 days.
+        const ANCHOR_DATE = '2026-05-11';
+        const ANCHOR_CITY_SLOT = 1; // Austin is index 1 in the city list
 
         const todayStr = new Date().toISOString().split('T')[0];
         const daysSinceAnchor = Math.round(
@@ -99,7 +96,7 @@ async function runDailyPipeline(overrideService, overrideCity, overrideCount) {
         );
 
         const totalNiches = targets.service_categories.length;
-        const sIndex = ((ANCHOR_NICHE + daysSinceAnchor) % totalNiches + totalNiches) % totalNiches;
+        const sIndex = daysSinceAnchor % totalNiches;
 
         // Build a flat ordered list: all cities across primary countries, then secondary
         const allCountries = [
@@ -113,13 +110,7 @@ async function runDailyPipeline(overrideService, overrideCity, overrideCount) {
             }
         }
 
-        // Days until the niche cycle first wraps back to 0 (= remaining niches in anchor city).
-        // Formula handles anchor niche 0 correctly (full cycle = totalNiches days).
-        const daysToFirstWrap = ((totalNiches - ANCHOR_NICHE - 1) % totalNiches) + 1;
-        const citySlot = daysSinceAnchor < daysToFirstWrap
-            ? 0
-            : (1 + Math.floor((daysSinceAnchor - daysToFirstWrap) / totalNiches)) % allCities.length;
-
+        const citySlot = (ANCHOR_CITY_SLOT + Math.floor(daysSinceAnchor / totalNiches)) % allCities.length;
         const { city: computedCity, country: computedCountry } = allCities[citySlot];
 
         city = computedCity;
