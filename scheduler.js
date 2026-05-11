@@ -86,7 +86,10 @@ async function runDailyPipeline(overrideService, overrideCity, overrideCount) {
         // Instead, niche and city are calculated purely from the calendar date.
         //
         // Anchor: 2026-05-05 = niche 11 (logistics companies), city slot 0 (New York, USA)
-        // Niche advances every day. City slot advances every 14 days (one full niche cycle).
+        // Niche advances every day. City advances when the niche cycle wraps back to 0
+        // (i.e. after a full 14-niche cycle completes), NOT after a fixed 14 calendar days.
+        // Because we anchored mid-cycle at niche 11, only 3 niches (11→12→13) remained
+        // in New York. Once the cycle wrapped to niche 0, the city moved to Austin.
         const ANCHOR_DATE = '2026-05-05';
         const ANCHOR_NICHE = 11;
 
@@ -110,7 +113,13 @@ async function runDailyPipeline(overrideService, overrideCity, overrideCount) {
             }
         }
 
-        const citySlot = Math.floor(Math.max(0, daysSinceAnchor) / totalNiches) % allCities.length;
+        // Days until the niche cycle first wraps back to 0 (= remaining niches in anchor city).
+        // Formula handles anchor niche 0 correctly (full cycle = totalNiches days).
+        const daysToFirstWrap = ((totalNiches - ANCHOR_NICHE - 1) % totalNiches) + 1;
+        const citySlot = daysSinceAnchor < daysToFirstWrap
+            ? 0
+            : (1 + Math.floor((daysSinceAnchor - daysToFirstWrap) / totalNiches)) % allCities.length;
+
         const { city: computedCity, country: computedCountry } = allCities[citySlot];
 
         city = computedCity;
